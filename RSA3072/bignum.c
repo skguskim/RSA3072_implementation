@@ -23,7 +23,7 @@ static int bn_bit_length(const Bignum* a) {
 
 // i번째 비트(0 = LSB) 조회 
 // 반환값이 뭔지 설명
-static int bn_get_bit(const Bignum* a, int bit_index) {
+static int bn_get_bit(const Bignum* a, const int bit_index) {
     if (bit_index < 0) return 0;
     int limb = bit_index / (int)LIMB_BITS;
     int off = bit_index % (int)LIMB_BITS;
@@ -62,12 +62,12 @@ static void bn_mul_small(Bignum* r, uint32_t k) {
 }
 
 // n비트 왼쪽 시프트 (a <<= n)
-static void bn_shift_left(Bignum* a, int shift) {
+static void bn_shift_left(Bignum* a, const int shift) {
 
 }
 
 // n비트 오른쪽 시프트 (a >>= n)
-static void bn_shift_right(Bignum* a, int shift) {
+static void bn_shift_right(Bignum* a, const int shift) {
 
 }
 
