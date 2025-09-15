@@ -137,6 +137,15 @@ char* bignum_to_hex(const Bignum* bn) {
 //  큰 수 비교
 // =====================================================================
 
+// ========= 헬퍼 함수 =========
+static inline int bn_ucmp(const Bignum* a, const Bignum* b) {
+    if (a->size != b->size) return (a->size > b->size) ? 1 : -1;
+    for (int i = a->size - 1; i >= 0; --i) {
+        if (a->limbs[i] != b->limbs[i]) return (a->limbs[i] > b->limbs[i]) ? 1 : -1;
+    }
+    return 0;
+}
+
 // ========= API 함수 =========
 // 비교: a>b → 1, a<b → -1, a==b → 0
 int bignum_compare(const Bignum* a, const Bignum* b) {

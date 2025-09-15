@@ -127,6 +127,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="bignum.h" />
     <ClInclude Include="rsa.h" />
   </ItemGroup>
   <ItemGroup>
