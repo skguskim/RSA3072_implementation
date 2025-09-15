@@ -26,8 +26,8 @@
   printf("디버깅용 출력");
 #endif
 ```
-visual studio에서 f5를 누르면 이 안에 있는 코드도 실행됩니다.
-아니면 테스트 출력만 화인하고 지우셔도 됩니다.
+visual studio에서 f5를 누르면 이 안에 있는 코드도 실행됩니다.<br>
+아니면 테스트 출력만 확인하고 지우셔도 됩니다.
 
 ## 코드 받는 법
 일단 git 설치하기 -> https://git-scm.com/downloads
