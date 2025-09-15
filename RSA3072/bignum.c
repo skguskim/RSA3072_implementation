@@ -95,8 +95,11 @@ static void bn_shift_right(Bignum* a, const int shift) {
 // =====================================================================
 
 // ========= API 함수 =========
-// 큰 수 bn을 0으로 초기화
+// 큰 수 bn을 0으로 초기화(선언 시에만 사용)
 void bignum_init(Bignum* bn) { bn_zero(bn); }
+
+// 큰 수 bn을 0으로 변경
+void bignum_set_zero(Bignum* bn) { bn_zero(bn); }
 
 // 큰 수를 복사
 // dest: 복사 대상
@@ -258,4 +261,7 @@ void bignum_subtract(Bignum* result, const Bignum* a, const Bignum* b) {
 //  큰 수 모듈러 연산
 // =====================================================================
 
+// ========= 헬퍼 함수 =========
 
+
+// ========= API 함수 =========

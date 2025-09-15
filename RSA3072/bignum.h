@@ -18,6 +18,7 @@ typedef struct {
 
 // Bignum 초기화, 복사, 해제 함수
 void bignum_init(Bignum* bn);
+void bignum_set_zero(Bignum* bn);
 void bignum_copy(Bignum* dest, const Bignum* src);
 
 // 문자열과 Bignum 간 변환 함수 (16진수 권장)
