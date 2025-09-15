@@ -11,7 +11,9 @@
 //  공통 헬퍼 함수
 // =====================================================================
 
-// 비트 길이 
+// 비트 길이 확인
+// a: 비트 길이를 확인할 큰 수 포인터
+// 반환값: 비트 길이
 static int bn_bit_length(const Bignum* a) {
     if (a->size == 0) return 0;
     uint32_t ms = a->limbs[a->size - 1];
@@ -21,9 +23,26 @@ static int bn_bit_length(const Bignum* a) {
     return bits + leading;
 }
 
+// 큰 수 a를 0으로 변경
+// a: 0으로 바꿀 큰 수 포인터
+// 반환값: 없음
+static void bn_zero(Bignum* a) {
+    memset(a->limbs, 0, sizeof(uint32_t) * MAX_LIMBS);
+    a->size = 0;
+}
+
+// 큰 수 a의 크기를 정규화(예시: 0032 -> 32)
+// a: 정규화할 큰 수 포인터
+// 반환값: 없음
+static void bn_normalize(Bignum* a) {
+    while (a->size > 0 && a->limbs[a->size - 1] == 0) {
+        a->size--;
+    }
+}
+
 // i번째 비트(0 = LSB) 조회 
-// 반환값이 뭔지 설명
-static int bn_get_bit(const Bignum* a, int bit_index) {
+// 반환값: 조회한 비트 값(0 또는 1)
+static int bn_get_bit(const Bignum* a, const int bit_index) {
     if (bit_index < 0) return 0;
     int limb = bit_index / (int)LIMB_BITS;
     int off = bit_index % (int)LIMB_BITS;
@@ -62,12 +81,12 @@ static void bn_mul_small(Bignum* r, uint32_t k) {
 }
 
 // n비트 왼쪽 시프트 (a <<= n)
-static void bn_shift_left(Bignum* a, int shift) {
+static void bn_shift_left(Bignum* a, const int shift) {
 
 }
 
 // n비트 오른쪽 시프트 (a >>= n)
-static void bn_shift_right(Bignum* a, int shift) {
+static void bn_shift_right(Bignum* a, const int shift) {
 
 }
 
@@ -76,8 +95,13 @@ static void bn_shift_right(Bignum* a, int shift) {
 // =====================================================================
 
 // ========= API 함수 =========
+// 큰 수 bn을 0으로 초기화
 void bignum_init(Bignum* bn) { bn_zero(bn); }
 
+// 큰 수를 복사
+// dest: 복사 대상
+// src: 복사할 원본
+// 반환값: 없음
 void bignum_copy(Bignum* dest, const Bignum* src) {
     if (dest == src) return;
     memcpy(dest->limbs, src->limbs, sizeof(uint32_t) * MAX_LIMBS);

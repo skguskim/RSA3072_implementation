@@ -82,7 +82,7 @@ void rsa_generate_keys(RSA_PublicKey* pub_key, RSA_PrivateKey* priv_key, const B
  * message: 암호화할 원문 Bignum
  * pub_key: 공개키
  */
-void rsa_encrypt(Bignum* ciphertext, const Bignum* message, const RSA_PublicKey* pub_key);
+int rsa_encrypt(Bignum* ciphertext, const Bignum* message, const RSA_PublicKey* pub_key);
 
 /**
  * RSA 복호화
@@ -90,7 +90,7 @@ void rsa_encrypt(Bignum* ciphertext, const Bignum* message, const RSA_PublicKey*
  * ciphertext: 복호화할 암호문 Bignum
  * priv_key: 개인키
  */
-void rsa_decrypt(Bignum* message, const Bignum* ciphertext, const RSA_PrivateKey* priv_key);
+int rsa_decrypt(Bignum* message, const Bignum* ciphertext, const RSA_PrivateKey* priv_key);
 
 // =============================================================================
 // ## 7. 테스트 벡터 (담당: 김강민) 파일: main.c
