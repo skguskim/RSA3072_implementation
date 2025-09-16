@@ -31,6 +31,9 @@ static void bn_zero(Bignum* a) {
     a->size = 0;
 }
 
+// a가 0이면 true, 아니면 false 반환
+static inline int bn_is_zero(const Bignum* a) { return a->size == 0; }
+
 // 큰 수 a의 크기를 정규화(예시: 0032 -> 32)
 // a: 정규화할 큰 수 포인터
 // 반환값: 없음
@@ -305,18 +308,23 @@ void bignum_subtract(Bignum* result, const Bignum* a, const Bignum* b) {
 //  큰 수 곱셈
 // =====================================================================
 
+void bignum_multiply(Bignum* result, const Bignum* a, const Bignum* b) {
 
+}
 
 // =====================================================================
 //  큰 수 나눗셈
 // =====================================================================
+void bignum_divide(Bignum* quotient, Bignum* remainder, const Bignum* a, const Bignum* b) {
 
+}
 
 
 // =====================================================================
 //  Montgomery Multiplication
 // =====================================================================
 
+// ========= 헬퍼 함수 =========
 // 상수 시간 로드를 위한 마스크
 static inline uint32_t ct_mask_if(int cond) {
     // cond != 0 -> 0xFFFFFFFF, cond == 0 -> 0x00000000
@@ -347,6 +355,7 @@ static uint32_t mont_n0prime(uint32_t n0) {
     return (uint32_t)(0u - x); // = -n0^{-1} mod 2^32
 }
 
+// CIOS 방법을 사용한 모듈러 거듭제곱 전용 몽고메리 곱셈
 static void mont_mul(Bignum* r, const Bignum* a, const Bignum* b, const Bignum* N, uint32_t n0prime) {
     const int n = N->size;
 
@@ -364,7 +373,7 @@ static void mont_mul(Bignum* r, const Bignum* a, const Bignum* b, const Bignum* 
         BB[i] = b->limbs[i] & bm;
     }
 
-    // t: 길이 n+2 워크버퍼
+    // t: 길이 n+2 버퍼
     uint32_t t[MAX_LIMBS + 2] = { 0 };
 
     // CIOS 스캔 (고정 길이)
@@ -401,7 +410,7 @@ static void mont_mul(Bignum* r, const Bignum* a, const Bignum* b, const Bignum* 
         t[n] = 0;
     }
 
-    // --- 최종 보정: 분기 없이 t >= N ? t-N : t ---
+    // 최종 보정
     uint32_t t_minus_N[MAX_LIMBS] = { 0 };
     uint32_t borrow = sub_n_ct(t_minus_N, t, NN, n); // t-N
     // borrow==0 → t>=N → t_minus_N 선택 / borrow==1 → t<N → t 선택
@@ -419,6 +428,81 @@ static void mont_mul(Bignum* r, const Bignum* a, const Bignum* b, const Bignum* 
     bn_normalize(r);
 }
 
+// 몽고메리 변환 헬퍼
+static void mont_to(Bignum* r, const Bignum* x,
+    const Bignum* N, uint32_t n0prime, const Bignum* RR) {
+    mont_mul(r, x, RR, N, n0prime);               // r = x * R  (mod N)
+}
+static void mont_from(Bignum* r, const Bignum* x_bar,
+    const Bignum* N, uint32_t n0prime) {
+    Bignum one; bn_zero(&one); one.limbs[0] = 1u; one.size = 1;
+    mont_mul(r, x_bar, &one, N, n0prime);         // r = x_bar * R^{-1} (mod N)
+}
+
+// RR = R^2 mod N (R = 2^(32 * N->size))
+// 왼쪽 시프트 대신 "두 배 + 조건부 감산"을 2*n*32 번 반복
+static void mont_compute_RR(Bignum* RR, const Bignum* N) {
+    bn_zero(RR);
+    RR->limbs[0] = 1u;
+    RR->size = 1;
+
+    const int nbits = 2 * N->size * (int)LIMB_BITS; // = 2*n*32
+    for (int i = 0; i < nbits; ++i) {
+        // RR <<= 1
+        bn_shift_left(RR, 1);
+
+        // RR = RR mod N (조건부 감산; 최악 1~몇 회)
+        if (bn_ucmp(RR, N) >= 0) bn_usub(RR, RR, N);
+    }
+}
+
+// a <- a mod N (단순 반복 감산; a가 N보다 훨씬 크면 비효율적)
+static void bn_reduce_simple(Bignum* a, const Bignum* N) {
+    bn_normalize(a);
+    while (bn_ucmp(a, N) >= 0) {
+        bn_usub(a, a, N);
+    }
+}
+
+// ========= API 함수 =========
+// 모듈러 곱셈 (몽고 메리 곱셈)
+// result = a*b mod modulus
+void bignum_mod_mul(Bignum* result, const Bignum* a, const Bignum* b, const Bignum* modulus) {
+    if (!result || !a || !b || !modulus || modulus->size == 0) {
+        bignum_set_zero(result);
+        return;
+    }
+    if ((modulus->limbs[0] & 1u) == 0) { // 몽고메리 전제: N 홀수
+        // 필요 시 비-몽고 경로를 따로 구현
+        bignum_set_zero(result);
+        return;
+    }
+
+    // 1) 파라미터
+    const uint32_t n0prime = mont_n0prime(modulus->limbs[0]);
+    Bignum RR;
+    mont_compute_RR(&RR, modulus);
+
+    // 2) 입력을 N으로 감축
+    Bignum A;
+    bignum_copy(&A, a);
+    bn_reduce_simple(&A, modulus);
+    Bignum B;
+    bignum_copy(&B, b);
+    bn_reduce_simple(&B, modulus);
+
+    // 3) 몽고메리 영역으로 진입
+    Bignum Abar, Bbar, Zbar;
+    mont_to(&Abar, &A, modulus, n0prime, &RR);
+    mont_to(&Bbar, &B, modulus, n0prime, &RR);
+
+    // 4) 곱(몽고메리 상태)
+    mont_mul(&Zbar, &Abar, &Bbar, modulus, n0prime);
+
+    // 5) 복귀
+    mont_from(result, &Zbar, modulus, n0prime);
+}
+
 // =====================================================================
 //  모듈러 거듭 제곱
 // =====================================================================
@@ -433,5 +517,55 @@ static void mont_mul(Bignum* r, const Bignum* a, const Bignum* b, const Bignum* 
 // exp: 지수
 // modulus: 모듈러스
 void bignum_mod_exp(Bignum* result, const Bignum* base, const Bignum* exp, const Bignum* modulus) {
+    // 예외/엣지 처리
+    if (!result || !base || !exp || !modulus || modulus->size == 0) {
+        bignum_set_zero(result);
+        return;
+    }
+    // 짝수 모듈러스는 몽고메리 불가 (RSA 모듈러스는 홀수이므로 OK)
+    if ((modulus->limbs[0] & 1u) == 0u) {
+        // 필요하면 여기서 다른(비몽고) 루틴으로 fallback 하세요.
+        bignum_set_zero(result);
+        return;
+    }
 
+    // --- 몽고메리 사전 준비 ---
+    const uint32_t n0prime = mont_n0prime(modulus->limbs[0]);
+
+    Bignum RR;
+    mont_compute_RR(&RR, modulus);  // RR = R^2 mod N
+
+    // a = base mod N (mont_mul은 a,b < N 가정으로 사용하는 게 안전)
+    Bignum a;
+    bignum_copy(&a, base);
+    bn_reduce_simple(&a, modulus);
+
+    // a_bar = a * R mod N = MonPro(a, RR)
+    Bignum a_bar;
+    bignum_init(&a_bar);
+    mont_mul(&a_bar, &a, &RR, modulus, n0prime);
+
+    // res_bar = 1 * R mod N  (몽고메리의 '1')
+    Bignum one;
+    bignum_init(&one);
+    one.limbs[0] = 1u;
+    one.size = 1;
+    Bignum res_bar;
+    bignum_init(&res_bar);
+
+    mont_mul(&res_bar, &one, &RR, modulus, n0prime);
+
+    // --- 지수승 루프 (LSB-first) ---
+    const int bits = bn_bit_length(exp);
+    for (int i = 0; i < bits; ++i) {
+        if (bn_get_bit(exp, i)) {
+            // res_bar = res_bar * a_bar (mod N)
+            mont_mul(&res_bar, &res_bar, &a_bar, modulus, n0prime);
+        }
+        // a_bar = a_bar^2 (mod N)
+        mont_mul(&a_bar, &a_bar, &a_bar, modulus, n0prime);
+    }
+
+    // --- 몽고메리 영역 → 일반 영역 복귀: res = res_bar * 1 * R^{-1} mod N
+    mont_mul(result, &res_bar, &one, modulus, n0prime);
 }

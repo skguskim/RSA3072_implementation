@@ -38,6 +38,9 @@ void bignum_subtract(Bignum* result, const Bignum* a, const Bignum* b);
 void bignum_multiply(Bignum* result, const Bignum* a, const Bignum* b);
 void bignum_divide(Bignum* quotient, Bignum* remainder, const Bignum* a, const Bignum* b);
 
+// ¸ðµâ·¯ °ö¼À (¸ù°í ¸Þ¸® °ö¼À)
+void bignum_mod_mul(Bignum* result, const Bignum* a, const Bignum* b, const Bignum* modulus);
+
 // ¸ðµâ·¯ °ÅµìÁ¦°ö (RSAÀÇ ÇÙ½É ¿¬»ê)
 // result = base^exp mod modulus
 void bignum_mod_exp(Bignum* result, const Bignum* base, const Bignum* exp, const Bignum* modulus);

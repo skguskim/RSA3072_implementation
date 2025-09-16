@@ -18,7 +18,6 @@ int rsa_encrypt(Bignum* ciphertext, const Bignum* message, const RSA_PublicKey* 
     }
 
 	Bignum m_reduced;
-	bignum_mod(&m_reduced, message, &pub_key->n);
 	bignum_mod_exp(ciphertext, &m_reduced, &pub_key->e, &pub_key->n);
 	return RSA_SUCCESS;
 }
@@ -44,7 +43,7 @@ int rsa_decrypt(Bignum* message, const Bignum* ciphertext, const RSA_PrivateKey*
 	else {
 		bignum_subtract(&h, &m_p, &m_q);
 	}
-	bn_mod_mul(&h, &h, &priv_key->qInv, &priv_key->p);
+	bignum_mod_mul(&h, &h, &priv_key->qInv, &priv_key->p);
 	bignum_divide(NULL, &h, &h, &priv_key->p);
 
     // m = m_q + q * h
