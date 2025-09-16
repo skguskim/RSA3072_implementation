@@ -1,6 +1,4 @@
 #include "rsa.h"
-#include "bignum.h"
-#include <stdio.h>
 #include <stddef.h>
 #include <windows.h>
 #include <bcrypt.h>
