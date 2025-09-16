@@ -25,6 +25,10 @@ void bignum_copy(Bignum* dest, const Bignum* src);
 int bignum_from_hex(Bignum* bn, const char* hex_str);
 char* bignum_to_hex(const Bignum* bn);
 
+// Bignum 출력 함수
+// name: 같이 출력할 설명
+void print_bignum(const char* name, const Bignum* bn);
+
 // Bignum 비교 함수 (a > b -> 1, a < b -> -1, a == b -> 0)
 int bignum_compare(const Bignum* a, const Bignum* b);
 
@@ -37,6 +41,3 @@ void bignum_divide(Bignum* quotient, Bignum* remainder, const Bignum* a, const B
 // 모듈러 거듭제곱 (RSA의 핵심 연산)
 // result = base^exp mod modulus
 void bignum_mod_exp(Bignum* result, const Bignum* base, const Bignum* exp, const Bignum* modulus);
-
-void bn_mod_mul(Bignum* r, const Bignum* a, const Bignum* b, const Bignum* m);
-void bignum_mod(Bignum* result, const Bignum* a, const Bignum* m);

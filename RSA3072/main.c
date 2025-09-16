@@ -242,16 +242,9 @@ int test_kgt_vector(const char* filename) {
     return 1;
 }
 
-void print_bignum(const char* name, const Bignum* bn) {
-    char* hex = bignum_to_hex(bn);
-    printf(" - %s: %s\n", name, hex);
-    free(hex);
-}
-
 int main() {
     int overall_ok = 1;
 
-    // RSA 키 생성 파트 (현재는 구현되어 있지 않으므로 주석 처리)
     Bignum p, q;
     RSA_PublicKey pub_key;
     RSA_PrivateKey priv_key;
@@ -279,16 +272,6 @@ int main() {
 
     rsa_encrypt(&c, &m, &pub_key);
     rsa_decrypt(&m_dec, &c, &priv_key);
-
-    char* hex_m_dec = bignum_to_hex(&m_dec);
-    char* hex_m = bignum_to_hex(&m);
-    //char* hex_n = bignum_to_hex(&(pub_key.n));
-    //char* hex_e = bignum_to_hex(&(pub_key.e));
-    char* hex_d = bignum_to_hex(&(priv_key.d));
-    char* hex_dp = bignum_to_hex(&(priv_key.dP));
-    char* hex_dq = bignum_to_hex(&(priv_key.dQ));
-    char* hex_qInv = bignum_to_hex(&(priv_key.qInv));
-    char* hex_c = bignum_to_hex(&c);
 
     print_bignum("m", &m);
     print_bignum("m_dec", &m_dec);

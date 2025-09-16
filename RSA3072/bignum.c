@@ -82,12 +82,62 @@ static void bn_mul_small(Bignum* r, uint32_t k) {
 
 // n비트 왼쪽 시프트 (a <<= n)
 static void bn_shift_left(Bignum* a, const int shift) {
+    if (shift <= 0 || a->size == 0) return;
+    int limb_shift = shift / (int)LIMB_BITS;
+    int bit_shift = shift % (int)LIMB_BITS;
 
+    if (a->size + limb_shift >= MAX_LIMBS) {
+        // 포화 방지: 가능한 한도까지만 밀고 나머지는 버림
+        limb_shift = (MAX_LIMBS - 1) - a->size;
+        if (limb_shift < 0) limb_shift = 0;
+    }
+
+    uint32_t tmp[MAX_LIMBS] = { 0 };
+    uint32_t carry = 0;
+    for (int i = 0; i < a->size && i + limb_shift < MAX_LIMBS; ++i) {
+        uint32_t lo = (bit_shift == 0) ? a->limbs[i] : (a->limbs[i] << bit_shift);
+        uint32_t hi = (bit_shift == 0) ? 0 : (a->limbs[i] >> (32 - bit_shift));
+        uint64_t v = (uint64_t)lo + ((uint64_t)carry);
+        tmp[i + limb_shift] = (uint32_t)v;
+        carry = (uint32_t)(v >> 32);
+        if (i + limb_shift + 1 < MAX_LIMBS) {
+            // hi는 다음 워드로 더해짐
+            uint64_t w = (uint64_t)tmp[i + limb_shift + 1] + hi;
+            tmp[i + limb_shift + 1] = (uint32_t)w;
+            if (w >> 32) carry += 1u;
+        }
+    }
+
+    int new_size = a->size + limb_shift + 1;
+    if (new_size > MAX_LIMBS) new_size = MAX_LIMBS;
+    memcpy(a->limbs, tmp, sizeof(uint32_t) * new_size);
+    a->size = new_size;
+    bn_normalize(a);
 }
 
 // n비트 오른쪽 시프트 (a >>= n)
 static void bn_shift_right(Bignum* a, const int shift) {
+    if (shift <= 0 || a->size == 0) return;
+    int limb_shift = shift / (int)LIMB_BITS;
+    int bit_shift = shift % (int)LIMB_BITS;
 
+    if (limb_shift >= a->size) { bn_zero(a); return; }
+
+    uint32_t tmp[MAX_LIMBS] = { 0 };
+    int j = 0;
+    for (int i = limb_shift; i < a->size; ++i, ++j) {
+        uint32_t cur = a->limbs[i];
+        uint32_t prev = (i + 1 < a->size) ? a->limbs[i + 1] : 0;
+        if (bit_shift == 0) {
+            tmp[j] = cur;
+        }
+        else {
+            tmp[j] = (cur >> bit_shift) | (prev << (32 - bit_shift));
+        }
+    }
+    memcpy(a->limbs, tmp, sizeof(uint32_t) * j);
+    a->size = j;
+    bn_normalize(a);
 }
 
 // =====================================================================
@@ -158,6 +208,12 @@ char* bignum_to_hex(const Bignum* bn) {
         n += snprintf(buf + n, maxlen - n, "%08x", bn->limbs[i]);
     }
     return buf;
+}
+
+void print_bignum(const char* name, const Bignum* bn) {
+    char* hex = bignum_to_hex(bn);
+    printf(" - %s: %s\n", name, hex);
+    free(hex);
 }
 
 // =====================================================================
@@ -258,10 +314,124 @@ void bignum_subtract(Bignum* result, const Bignum* a, const Bignum* b) {
 
 
 // =====================================================================
-//  큰 수 모듈러 연산
+//  Montgomery Multiplication
+// =====================================================================
+
+// 상수 시간 로드를 위한 마스크
+static inline uint32_t ct_mask_if(int cond) {
+    // cond != 0 -> 0xFFFFFFFF, cond == 0 -> 0x00000000
+    return (uint32_t)0 - (uint32_t)(cond != 0);
+}
+
+// out = x - y  (n워드), 반환: borrow(0 또는 1). 분기 없음.
+static uint32_t sub_n_ct(uint32_t* out, const uint32_t* x, const uint32_t* y, int n) {
+    uint64_t borrow = 0;
+    for (int i = 0; i < n; ++i) {
+        uint64_t xi = x[i];
+        uint64_t yi = y[i];
+        uint64_t d = xi - yi - borrow;
+        out[i] = (uint32_t)d;
+        borrow = (d >> 63) & 1u;  // 음수면 borrow = 1
+    }
+    return (uint32_t)borrow;
+}
+
+// n0' 계산
+static uint32_t mont_n0prime(uint32_t n0) {
+    uint32_t x = 1;
+    x *= 2 - n0 * x;
+    x *= 2 - n0 * x;
+    x *= 2 - n0 * x;
+    x *= 2 - n0 * x;
+    x *= 2 - n0 * x;
+    return (uint32_t)(0u - x); // = -n0^{-1} mod 2^32
+}
+
+static void mont_mul(Bignum* r, const Bignum* a, const Bignum* b, const Bignum* N, uint32_t n0prime) {
+    const int n = N->size;
+
+    // N, a, b의 하위 n워드를 로컬에 준비 (상수시간 로드)
+    uint32_t NN[MAX_LIMBS] = { 0 };
+    uint32_t AA[MAX_LIMBS] = { 0 };
+    uint32_t BB[MAX_LIMBS] = { 0 };
+
+    for (int i = 0; i < n; ++i) {
+        NN[i] = N->limbs[i]; // N은 모듈러스(공개)라 그냥 로드
+        // a,b는 상수시간 마스크로 size 넘어가면 0 취급
+        uint32_t am = ct_mask_if(i < a->size);
+        uint32_t bm = ct_mask_if(i < b->size);
+        AA[i] = a->limbs[i] & am;
+        BB[i] = b->limbs[i] & bm;
+    }
+
+    // t: 길이 n+2 워크버퍼
+    uint32_t t[MAX_LIMBS + 2] = { 0 };
+
+    // CIOS 스캔 (고정 길이)
+    for (int i = 0; i < n; ++i) {
+        uint64_t bi = (uint64_t)BB[i];
+
+        // t = t + a*bi
+        uint64_t carry = 0;
+        for (int j = 0; j < n; ++j) {
+            uint64_t sum = (uint64_t)t[j] + (uint64_t)AA[j] * bi + carry;
+            t[j] = (uint32_t)sum;
+            carry = sum >> 32;
+        }
+        uint64_t acc = (uint64_t)t[n] + carry;
+        t[n] = (uint32_t)acc;
+        t[n + 1] = (uint32_t)(acc >> 32);
+
+        // m = (t[0] * n0') mod 2^32  (하위워드만 필요)
+        uint32_t m = (uint32_t)((uint64_t)t[0] * (uint64_t)n0prime);
+
+        // t = t + m*N
+        carry = 0;
+        for (int j = 0; j < n; ++j) {
+            uint64_t sum = (uint64_t)t[j] + (uint64_t)m * (uint64_t)NN[j] + carry;
+            t[j] = (uint32_t)sum;
+            carry = sum >> 32;
+        }
+        acc = (uint64_t)t[n] + carry;
+        t[n] = (uint32_t)acc;
+        t[n + 1] += (uint32_t)(acc >> 32);
+
+        // t = t / b (워드 1칸 오른쪽 시프트) : 고정 길이
+        for (int k = 0; k < n; ++k) t[k] = t[k + 1];
+        t[n] = 0;
+    }
+
+    // --- 최종 보정: 분기 없이 t >= N ? t-N : t ---
+    uint32_t t_minus_N[MAX_LIMBS] = { 0 };
+    uint32_t borrow = sub_n_ct(t_minus_N, t, NN, n); // t-N
+    // borrow==0 → t>=N → t_minus_N 선택 / borrow==1 → t<N → t 선택
+    uint32_t mask = (uint32_t)0 - (uint32_t)(1u - borrow); // 0xFFFFFFFF 또는 0x00000000
+
+    // out = (t_minus_N & mask) | (t & ~mask)
+    for (int i = 0; i < n; ++i) {
+        uint32_t v = (t_minus_N[i] & mask) | (t[i] & ~mask);
+        r->limbs[i] = v;
+    }
+    // 상위 워드는 0으로 정리
+    for (int i = n; i < MAX_LIMBS; ++i) r->limbs[i] = 0;
+
+    r->size = n;
+    bn_normalize(r);
+}
+
+// =====================================================================
+//  모듈러 거듭 제곱
 // =====================================================================
 
 // ========= 헬퍼 함수 =========
 
 
 // ========= API 함수 =========
+// 모듈러 거듭제곱 result = base^exp mod modulus
+// result: 결과를 저장할 Bignum 포인터
+// base: 밑
+// exp: 지수
+// modulus: 모듈러스
+void bignum_mod_exp(Bignum* result, const Bignum* base, const Bignum* exp, const Bignum* modulus) {
+
+}
