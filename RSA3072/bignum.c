@@ -5,6 +5,9 @@
 #include <math.h> // 추가
 #include <complex.h> // 추가
 
+#define LIMB_BITS 32u //추가
+#define MAX_LIMBS BIGNUM_ARRAY_SIZE //추가
+
 // 카라츠바 알고리즘에서 연산 속도를 높이기 위해 FFT 사용
 // FFT에서 회전인자 e^{±iθ} 계산 시 필요한 π
 // 일부 구현에서는 <math.h>가 M_PI를 제공하지 않으므로, 없으면 직접 정의
@@ -492,19 +495,20 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
         return;
     }
 
-    // 1워드 제수(divisor) 빠른 경로
+    // 제수(divisor)의 크기가 1워드인 경우->기본 나눗셈 
     if (b->size == 1) {
         uint32_t divisor = b->limbs[0];
-        uint64_t rem = 0;
+        uint64_t rem = 0; //rem : 나머지 저장
 
         quotient->size = a->size; // 몫의 최대 길이 == 피제수(dividend)의 길이 
-        for (int i = a->size - 1; i >= 0; --i) {
+        for (int i = a->size - 1; i >= 0; --i) { // 최상위 워드부터 계산 
             uint64_t cur = (rem << 32) | a->limbs[i];
             quotient->limbs[i] = (uint32_t)(cur / divisor);
             rem = cur % divisor;
         }
         bn_normalize(quotient);
 
+        // 나머지의 크기 설정 및 값 복사 
         if (rem) { remainder->limbs[0] = (uint32_t)rem; remainder->size = 1; }
         else { remainder->size = 0; }
         return;
@@ -517,7 +521,9 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
     bignum_copy(&U, a);
     bignum_copy(&V, b);
 
-    uint32_t v_high = V.limbs[V.size - 1];
+    // 1.나눗셈의 안정화를 위한 정규화(스케일 조정)
+    // divisor(V)의 최상위 워드가 1이 되기 위한 시프트 비트 수(s) 계산
+    uint32_t v_high = V.limbs[V.size - 1]; // v_high: 제수의 최상위 워드
     int s = 0;
     if (v_high < 0x80000000u) {
         while ((v_high & 0x80000000u) == 0u) { v_high <<= 1; s++; }
@@ -527,9 +533,9 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
         bn_shift_left(&V, s);
     }
 
-    int n = V.size;                   // length of divisor
-    int m = U.size - n;               // 몫 자리수-1
-    if (m < 0) {                      // 방어
+    int n = V.size;                   // n : 제수(divisor) 길이
+    int m = U.size - n;               // m : 몫의 길이-1
+    if (m < 0) {                      // a < b -> 몫 0, 나머지 a                  
         bignum_copy(remainder, a);
         return;
     }
@@ -544,7 +550,7 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
     // 몫 워드 버퍼
     uint32_t Qp[MAX_LIMBS] = { 0 };
     int q_len = m + 1;
-    if (q_len > MAX_LIMBS) q_len = MAX_LIMBS;
+    if (q_len > MAX_LIMBS) q_len = MAX_LIMBS;  //여기까지 수정완료&변수명 업데이트 예정
 
     // 메인 루프: j = m down to 0
     for (int j = m; j >= 0; --j) {
