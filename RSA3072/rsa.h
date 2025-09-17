@@ -82,7 +82,7 @@ void rsa_generate_keys(RSA_PublicKey* pub_key, RSA_PrivateKey* priv_key, const B
  * message: 암호화할 원문 Bignum
  * pub_key: 공개키
  */
-int rsa_encrypt(Bignum* ciphertext, const Bignum* message, const RSA_PublicKey* pub_key);
+int rsa_encrypt(uint8_t* ciphertext, const Bignum* message, const RSA_PublicKey* pub_key);
 
 /**
  * RSA 복호화
@@ -109,5 +109,5 @@ int rsa_decrypt(Bignum* message, const Bignum* ciphertext, const RSA_PrivateKey*
 // k: RSA 모듈러스 길이 (바이트)
 // seed: OAEP에 사용될 시드(SHA256 해시 길이인 32바이트여야 함)
 
-int rsa_oaep_pad(unsigned char* out, const unsigned char* msg, size_t msg_len, size_t k, const unsigned char* seed);
+int rsa_oaep_encode(uint8_t *out, const uint8_t *L, const Bignum *M, size_t k, const uint8_t *seed);
 
