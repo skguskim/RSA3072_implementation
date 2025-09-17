@@ -7,17 +7,58 @@
 #define MAX_LIMBS BIGNUM_ARRAY_SIZE
 
 typedef unsigned char  u8;
-typedef uint32_t       u32;
-typedef uint64_t       u64;
 
 // =====================================================================
 //  공통 헬퍼 함수
 // =====================================================================
 
 // 상위 0 워드들을 잘라 유효 길이로 줄여 반환
-static inline int  limbs_trim(const u32* x, int n){ 
+static inline int  limbs_trim(const uint32_t* x, int n){ 
     while(n>0 && x[n-1]==0u) --n; 
     return n; 
+}
+
+int bignum_from_binary(Bignum* bn, const unsigned char* buf, size_t buf_len) {
+    bignum_init(bn);
+    if (!buf || buf_len == 0) {
+        return 0; // 성공 (0으로 초기화)
+    }
+
+    size_t limbs_needed = (buf_len + sizeof(uint32_t) - 1) / sizeof(uint32_t);
+    if (limbs_needed > BIGNUM_ARRAY_SIZE) {
+        return -1; // 버퍼 오버플로우
+    }
+
+    memcpy(bn->limbs, buf, buf_len);
+    bn->size = (int)limbs_needed;
+
+    // bignum.c에 정의된 정규화 함수 호출
+    while (bn->size > 0 && bn->limbs[bn->size - 1] == 0) {
+        bn->size--;
+    }
+
+    return 0;
+}
+
+// Bignum의 특정 비트를 1로 설정합니다.
+void bn_set_bit_local(Bignum* bn, int bit_index) {
+    if (bit_index < 0) return;
+
+    int limb_idx = bit_index / 32;
+    int bit_offset = bit_index % 32;
+
+    if (limb_idx >= BIGNUM_ARRAY_SIZE) return; // 범위 초과
+
+    // 필요하다면 Bignum의 size 확장
+    if (limb_idx >= bn->size) {
+        // 기존 size와 새 limb_idx 사이를 0으로 채움
+        for (int i = bn->size; i <= limb_idx; ++i) {
+            bn->limbs[i] = 0;
+        }
+        bn->size = limb_idx + 1;
+    }
+
+    bn->limbs[limb_idx] |= (1u << bit_offset);
 }
 
 // 비트 길이 확인
@@ -155,67 +196,10 @@ static void bn_shift_right(Bignum* a, const int shift) {
 }
 
 // 카라츠바 배열 연산 헬퍼
-static inline u32 add_n(u32* r, const u32* x, const u32* y, int n){
-    u64 c=0;
-    for(int i=0;i<n;++i){ u64 s=(u64)x[i]+(u64)y[i]+c; r[i]=(u32)s; c=s>>32; }
-    return (u32)c;
-}
-
-// r = x + y (가변 길이), 반환: 실제 길이
-static int add_var(u32* r, const u32* x, int xn, const u32* y, int yn){
-    int n = (xn>yn?xn:yn);
-    u64 c=0;
-    for(int i=0;i<n;++i){
-        u64 xi = (i<xn)?x[i]:0, yi=(i<yn)?y[i]:0;
-        u64 s = xi+yi+c;
-        r[i]=(u32)s; c=s>>32;
-    }
-    if(c){ r[n++]=(u32)c; }
-    return n;
-}
-
-// r = x - y (가변 길이, x>=y 가정), 반환: 실제 길이
-static int sub_var(u32* r, const u32* x, int xn, const u32* y, int yn){
-    u64 b=0;
-    for(int i=0;i<xn;++i){
-        u64 xi=x[i], yi=(i<yn)?y[i]:0;
-        u64 d = xi - yi - b;
-        r[i]=(u32)d;
-        b = (d>>63)&1u;
-    }
-    int rn = xn; while(rn>0 && r[rn-1]==0u) --rn;
-    return rn;
-}
-
-// 스쿨북 곱: r 길이 >= an+bn, r는 사전에 0으로 클리어되어 있어야 안정적
-static void mul_schoolbook(u32* r, const u32* a, int an, const u32* b, int bn){
-    for(int i=0;i<an;++i){
-        u64 carry=0, ai=a[i];
-        int k=i;
-        for(int j=0;j<bn;++j,++k){
-            u64 t = (u64)r[k] + ai*(u64)b[j] + carry;
-            r[k]=(u32)t; carry=t>>32;
-        }
-        // 남은 carry 전파
-        while(carry){
-            u64 t=(u64)r[k] + carry;
-            r[k]=(u32)t; carry=t>>32; ++k;
-        }
-    }
-}
-
-// r += x (오프셋 off에서 시작)
-static void add_into_at(u32* r, int rlen, const u32* x, int xn, int off){
-    u64 c=0;
-    int i=0, k=off;
-    for(; i<xn; ++i, ++k){
-        u64 t=(u64)r[k] + (u64)x[i] + c;
-        r[k]=(u32)t; c=t>>32;
-    }
-    while(c && k<rlen){
-        u64 t=(u64)r[k] + c;
-        r[k]=(u32)t; c=t>>32; ++k;
-    }
+static inline uint32_t add_n(uint32_t* r, const uint32_t* x, const uint32_t* y, int n){
+    uint64_t c=0;
+    for(int i=0;i<n;++i){ uint64_t s=(uint64_t)x[i]+(uint64_t)y[i]+c; r[i]=(uint32_t)s; c=s>>32; }
+    return (uint32_t)c;
 }
 // =====================================================================
 //  큰 수 초기화, 복사, 해제, 변환 등
@@ -383,60 +367,63 @@ void bignum_subtract(Bignum* result, const Bignum* a, const Bignum* b) {
 // =====================================================================
 
 // ========= 헬퍼 함수 =========
-// r = a * b
-static int add_var(u32* r, const u32* x, int xn, const u32* y, int yn){
-    int n = (xn>yn?xn:yn);
-    u64 c=0;
-    for(int i=0;i<n;++i){
-        u64 xi = (i<xn)?x[i]:0, yi=(i<yn)?y[i]:0;
-        u64 s = xi+yi+c;
-        r[i]=(u32)s; c=s>>32;
+
+// r = x + y (가변 길이), 반환: 실제 길이
+static int add_var(uint32_t* r, const uint32_t* x, int xn, const uint32_t* y, int yn) {
+    int n = (xn > yn ? xn : yn);
+    uint64_t c = 0;
+    for (int i = 0; i < n; ++i) {
+        uint64_t xi = (i < xn) ? x[i] : 0, yi = (i < yn) ? y[i] : 0;
+        uint64_t s = xi + yi + c;
+        r[i] = (uint32_t)s; c = s >> 32;
     }
-    if(c){ r[n++]=(u32)c; }
+    if (c) { r[n++] = (uint32_t)c; }
     return n;
 }
 
-static int sub_var(u32* r, const u32* x, int xn, const u32* y, int yn){
-    u64 b=0;
+static int sub_var(uint32_t* r, const uint32_t* x, int xn, const uint32_t* y, int yn){
+    uint64_t b=0;
     for(int i=0;i<xn;++i){
-        u64 xi=x[i], yi=(i<yn)?y[i]:0;
-        u64 d = xi - yi - b;
-        r[i]=(u32)d;
+        uint64_t xi=x[i], yi=(i<yn)?y[i]:0;
+        uint64_t d = xi - yi - b;
+        r[i]=(uint32_t)d;
         b = (d>>63)&1u;
     }
     return limbs_trim(r, xn);
 }
 
-static void mul_schoolbook(u32* r, const u32* a, int an, const u32* b, int bn){
-    if (an == 0 || bn == 0) return;
-    memset(r, 0, sizeof(u32) * (an + bn));
-    for(int i=0;i<an;++i){
-        u64 carry=0, ai=a[i];
-        for(int j=0;j<bn;++j){
-            u64 t = (u64)r[i+j] + ai*(u64)b[j] + carry;
-            r[i+j]=(u32)t; carry=t>>32;
+// 스쿨북 곱: r 길이 >= an+bn, r는 사전에 0으로 클리어되어 있어야 안정적
+static void mul_schoolbook(uint32_t* r, const uint32_t* a, int an, const uint32_t* b, int bn) {
+    for (int i = 0; i < an; ++i) {
+        uint64_t carry = 0, ai = a[i];
+        int k = i;
+        for (int j = 0; j < bn; ++j, ++k) {
+            uint64_t t = (uint64_t)r[k] + ai * (uint64_t)b[j] + carry;
+            r[k] = (uint32_t)t; carry = t >> 32;
         }
-        if(carry) {
-            r[i+bn] += (u32)carry;
+        // 남은 carry 전파
+        while (carry) {
+            uint64_t t = (uint64_t)r[k] + carry;
+            r[k] = (uint32_t)t; carry = t >> 32; ++k;
         }
     }
 }
 
-static void add_into_at(u32* r, int rlen, const u32* x, int xn, int off){
+static void add_into_at(uint32_t* r, int rlen, const uint32_t* x, int xn, int off){
     if (xn == 0) return;
-    u64 c=0;
+    uint64_t c=0;
     int i=0, k=off;
     for(; i<xn && k<rlen; ++i, ++k){
-        u64 t=(u64)r[k] + (u64)x[i] + c;
-        r[k]=(u32)t; c=t>>32;
+        uint64_t t=(uint64_t)r[k] + (uint64_t)x[i] + c;
+        r[k]=(uint32_t)t; c=t>>32;
     }
     while(c && k<rlen){
-        u64 t=(u64)r[k] + c;
-        r[k]=(u32)t; c=t>>32; ++k;
+        uint64_t t=(uint64_t)r[k] + c;
+        r[k]=(uint32_t)t; c=t>>32; ++k;
     }
 }
 
-static void karatsuba_recursive(u32* r, const u32* a, int an, const u32* b, int bn, u32* ws) {
+static void karatsuba_recursive(uint32_t* r, const uint32_t* a, int an, const uint32_t* b, int bn, uint32_t* ws) {
     an = limbs_trim(a, an);
     bn = limbs_trim(b, bn);
 
@@ -451,18 +438,18 @@ static void karatsuba_recursive(u32* r, const u32* a, int an, const u32* b, int 
     // int m = ( (an > bn ? an : bn) + 1 ) / 2;
     int m = (an > bn) ? (an / 2) : (bn / 2);
 
-    const u32* a0 = a; int an0 = (an > m) ? m : an;
-    const u32* a1 = a + m; int an1 = (an > m) ? (an - m) : 0;
-    const u32* b0 = b; int bn0 = (bn > m) ? m : bn;
-    const u32* b1 = b + m; int bn1 = (bn > m) ? (bn - m) : 0;
+    const uint32_t* a0 = a; int an0 = (an > m) ? m : an;
+    const uint32_t* a1 = a + m; int an1 = (an > m) ? (an - m) : 0;
+    const uint32_t* b0 = b; int bn0 = (bn > m) ? m : bn;
+    const uint32_t* b1 = b + m; int bn1 = (bn > m) ? (bn - m) : 0;
 
-    u32* sA = ws;
-    u32* sB = sA + (m + 1);
-    u32* z1_prod = sB + (m + 1);
-    u32* next_ws = z1_prod + (2 * m + 2);
+    uint32_t* sA = ws;
+    uint32_t* sB = sA + (m + 1);
+    uint32_t* z1_prod = sB + (m + 1);
+    uint32_t* next_ws = z1_prod + (2 * m + 2);
 
-    u32* z0 = r;
-    u32* z2 = r + 2 * m;
+    uint32_t* z0 = r;
+    uint32_t* z2 = r + 2 * m;
 
     // z0 = a0 * b0 (결과는 r의 앞부분에 저장)
     karatsuba_recursive(z0, a0, an0, b0, bn0, next_ws);
@@ -500,12 +487,12 @@ void bignum_multiply(Bignum* result, const Bignum* a, const Bignum* b) {
     int bn = b->size;
     int rn = an + bn;
 
-    u32* rbuf = (u32*)calloc(rn + 2, sizeof(u32));
+    uint32_t* rbuf = (uint32_t*)calloc(rn + 2, sizeof(uint32_t));
     if (!rbuf) { bn_zero(result); return; }
 
     int n = (an > bn ? an : bn);
     size_t ws_size = 4 * n + 8;
-    u32* workspace = (u32*)calloc(ws_size, sizeof(u32));
+    uint32_t* workspace = (uint32_t*)calloc(ws_size, sizeof(uint32_t));
     if (!workspace) { free(rbuf); bn_zero(result); return; }
     
     karatsuba_recursive(rbuf, a->limbs, an, b->limbs, bn, workspace);
@@ -514,7 +501,7 @@ void bignum_multiply(Bignum* result, const Bignum* a, const Bignum* b) {
     if (trim > MAX_LIMBS) trim = MAX_LIMBS;
     
     bn_zero(result);
-    memcpy(result->limbs, rbuf, sizeof(u32) * trim);
+    memcpy(result->limbs, rbuf, sizeof(uint32_t) * trim);
     result->size = trim;
 
     free(rbuf);
