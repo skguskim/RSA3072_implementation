@@ -18,6 +18,49 @@ static inline int  limbs_trim(const uint32_t* x, int n){
     return n; 
 }
 
+int bignum_from_binary(Bignum* bn, const unsigned char* buf, size_t buf_len) {
+    bignum_init(bn);
+    if (!buf || buf_len == 0) {
+        return 0; // 성공 (0으로 초기화)
+    }
+
+    size_t limbs_needed = (buf_len + sizeof(uint32_t) - 1) / sizeof(uint32_t);
+    if (limbs_needed > BIGNUM_ARRAY_SIZE) {
+        return -1; // 버퍼 오버플로우
+    }
+
+    memcpy(bn->limbs, buf, buf_len);
+    bn->size = (int)limbs_needed;
+
+    // bignum.c에 정의된 정규화 함수 호출
+    while (bn->size > 0 && bn->limbs[bn->size - 1] == 0) {
+        bn->size--;
+    }
+
+    return 0;
+}
+
+// Bignum의 특정 비트를 1로 설정합니다.
+void bn_set_bit_local(Bignum* bn, int bit_index) {
+    if (bit_index < 0) return;
+
+    int limb_idx = bit_index / 32;
+    int bit_offset = bit_index % 32;
+
+    if (limb_idx >= BIGNUM_ARRAY_SIZE) return; // 범위 초과
+
+    // 필요하다면 Bignum의 size 확장
+    if (limb_idx >= bn->size) {
+        // 기존 size와 새 limb_idx 사이를 0으로 채움
+        for (int i = bn->size; i <= limb_idx; ++i) {
+            bn->limbs[i] = 0;
+        }
+        bn->size = limb_idx + 1;
+    }
+
+    bn->limbs[limb_idx] |= (1u << bit_offset);
+}
+
 // 비트 길이 확인
 // a: 비트 길이를 확인할 큰 수 포인터
 // 반환값: 비트 길이
