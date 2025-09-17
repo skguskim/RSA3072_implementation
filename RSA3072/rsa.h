@@ -108,6 +108,5 @@ int rsa_decrypt(Bignum* message, const Bignum* ciphertext, const RSA_PrivateKey*
 // msg_len: 원본 메시지 길이 (바이트)
 // k: RSA 모듈러스 길이 (바이트)
 // seed: OAEP에 사용될 시드(SHA256 해시 길이인 32바이트여야 함)
-
 int rsa_oaep_pad(unsigned char* out, const unsigned char* msg, size_t msg_len, size_t k, const unsigned char* seed);
 
