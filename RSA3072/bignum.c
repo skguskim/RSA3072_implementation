@@ -448,8 +448,9 @@ static void karatsuba_recursive(u32* r, const u32* a, int an, const u32* b, int 
         return;
     }
 
+    // int m = ( (an > bn ? an : bn) + 1 ) / 2;
     int m = (an > bn) ? (an / 2) : (bn / 2);
-    
+
     const u32* a0 = a; int an0 = (an > m) ? m : an;
     const u32* a1 = a + m; int an1 = (an > m) ? (an - m) : 0;
     const u32* b0 = b; int bn0 = (bn > m) ? m : bn;
@@ -462,25 +463,28 @@ static void karatsuba_recursive(u32* r, const u32* a, int an, const u32* b, int 
 
     u32* z0 = r;
     u32* z2 = r + 2 * m;
-    memset(z0, 0, sizeof(u32) * 2 * m);
-    memset(z2, 0, sizeof(u32) * (an - m + bn - m + 2)); 
+
+    // z0 = a0 * b0 (결과는 r의 앞부분에 저장)
     karatsuba_recursive(z0, a0, an0, b0, bn0, next_ws);
+    // z2 = a1 * b1 (결과는 r의 뒷부분에 저장)
     karatsuba_recursive(z2, a1, an1, b1, bn1, next_ws);
-    
+
     int z0n = limbs_trim(z0, 2 * m);
-    int z2n = limbs_trim(z2, an - m + bn - m + 2); 
-    
+    int z2n = limbs_trim(z2, an - m + bn - m + 2);
+
     int sAn = add_var(sA, a0, an0, a1, an1);
     int sBn = add_var(sB, b0, bn0, b1, bn1);
-    memset(z1_prod, 0, sizeof(u32) * (sAn + sBn + 1));
+
+    // z1_prod = (a0+a1)*(b0+b1)
     karatsuba_recursive(z1_prod, sA, sAn, sB, sBn, next_ws);
-    
+
+    // z1_prod = z1_prod - z0 - z2
     int z1n = limbs_trim(z1_prod, sAn + sBn);
     z1n = sub_var(z1_prod, z1_prod, z1n, z0, z0n);
     z1n = sub_var(z1_prod, z1_prod, z1n, z2, z2n);
 
+    // z1을 결과 버퍼의 중간에 더해준다.
     add_into_at(r, an + bn + 2, z1_prod, z1n, m);
-    add_into_at(r, an + bn + 2, z2, z2n, 2 * m);
 }
 
 // ========= API 함수 =========
