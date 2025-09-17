@@ -117,17 +117,6 @@ void generate_prime(Bignum* prime, int bits) {
 
         free(buffer);
 
-        // 최상위 비트를 1로 설정(비트 크기 보장)
-        int msb_limb = (bits - 1) / 32;
-        int msb_bit = (bits - 1) % 32;
-        candidate.limbs[msb_limb] |= (1 << msb_bit);
-        if (msb_limb >= candidate.size) {
-            candidate.size = msb_limb + 1;
-        }
-
-        // 최하위 비트를 1로 설정(홀수 보장)
-        candidate.limbs[0] |= 1;
-
         // 밀러-라빈 테스트로 소수인지 확인
         if (is_probably_prime(&candidate, MILLER_RABIN_ROUNDS)) {
             bignum_copy(prime, &candidate);
