@@ -2,7 +2,6 @@
 #include <stddef.h>
 #include <windows.h>
 #include <bcrypt.h>
-#include <stddef.h>
 #pragma comment(lib, "bcrypt.lib")
 
 // OS CSPRNG를 이용하여 바이트를 생성
