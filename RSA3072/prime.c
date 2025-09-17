@@ -90,21 +90,24 @@ int is_probably_prime(const Bignum* n, const int k) {//k=64
 void generate_prime(Bignum* prime, int bits) {
     Bignum candidate;
 
+    // 1. 난수 생성에 필요한 바이트 수 계산
+    int bytes = (bits + 7) / 8;
+    unsigned char* buffer = (unsigned char*)malloc(bytes);
+
+    if (!buffer) { // 메모리 할당 실패 시
+        bignum_set_zero(prime); // prime = 0
+        return;
+    }
+
     while (1) {
         bignum_init(&candidate);
 
-        // 1. 난수 생성에 필요한 바이트 수 계산
-        int bytes = (bits + 7) / 8;
-        unsigned char* buffer = (unsigned char*)malloc(bytes);
-        if (buffer == NULL) continue;
-
         // 2. 안전한 난수 생성
-        if (generate_secure_random(buffer, bytes) != 0) {
-            free(buffer);
+        if (generate_secure_random(buffer, bytes) != 0) { // 난수 실패면 다음 라운드 
             continue;
         }
 
-        // 3. 바이트를 Bignum으로 변환
+        // 3. 바이트 -> Bignum
         for (int i = 0; i < bytes; i++) {
             int limb_idx = i / 4; // 몇 번째 limb인지
             int byte_idx = i % 4; //그 limb 안에서 몇 번째 바이트 자리인지
@@ -115,12 +118,11 @@ void generate_prime(Bignum* prime, int bits) {
             }
         }
 
-        free(buffer);
-
-        // 4. 밀러-라빈 테스트로 소수인지 확인
+        // 4. 소수 판정(밀러-라빈 테스트)
         if (is_probably_prime(&candidate, MILLER_RABIN_ROUNDS)) {
             bignum_copy(prime, &candidate);
-            return; // 소수이면 루프 종료
+            free(buffer);
+            return; // 소수이면 함수 종료
         }
     }
 }
