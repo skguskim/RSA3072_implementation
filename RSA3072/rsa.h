@@ -111,4 +111,5 @@ int rsa_decrypt(Bignum* message, const Bignum* ciphertext, const RSA_PrivateKey*
 
 int rsa_oaep_encode(uint8_t *out, const uint8_t *L, const Bignum *M, size_t k, const uint8_t *seed);
 
+int rsa_oaep_decode(Bignum *M_out, const uint8_t *L, const uint8_t *EM, size_t k);
 
