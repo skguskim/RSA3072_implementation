@@ -116,7 +116,7 @@ static int bignum_modinv(Bignum* inv, const Bignum* a, const Bignum* m) {
 		// ---- fix: (q*t1) % m 로 축소한 뒤 t0에서 빼기 ----
 		Bignum q_t1, q_t1_mod, tmp;
 		bignum_multiply(&q_t1, &q, &t1);
-		bignum_mod(&q_t1_mod, &q_t1, m);    // q_t1_mod = (q*t1) % m
+		bignum_divide(NULL, &q_t1_mod, &q_t1, m);    // q_t1_mod = (q*t1) % m
 
 		if (bignum_compare(&t0, &q_t1_mod) >= 0) {
 			bignum_subtract(&tmp, &t0, &q_t1_mod);
@@ -177,8 +177,8 @@ void rsa_generate_keys(RSA_PublicKey* pub_key, RSA_PrivateKey* priv_key, const B
 
 	// CRT 파라미터
 	Bignum dP, dQ, qInv;
-	bignum_mod(&dP, &d, &p1);	// d mod (p-1)
-	bignum_mod(&dQ, &d, &q1);	// d mod (q-1)
+	bignum_divide(NULL, &dP, &d, &p1);	// d mod (p-1)
+	bignum_divide(NULL, &dQ, &d, &q1);	// d mod (q-1)
 	bignum_modinv(&qInv, q, p);	// q^(-1) mod p
 
 	// 결과 저장

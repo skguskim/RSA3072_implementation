@@ -137,6 +137,7 @@
     <ClCompile Include="prime.c" />
     <ClCompile Include="random.c" />
     <ClCompile Include="rsa.c" />
+    <ClCompile Include="test_division.c" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="test\RSAES_(3072)(65537)(SHA256)_DET.txt" />

@@ -41,6 +41,9 @@
     <ClCompile Include="oaep.c">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="test_division.c">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Text Include="test\RSAES_(3072)(65537)(SHA256)_DET.txt">
