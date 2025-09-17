@@ -1,4 +1,4 @@
-#include "RSA3072/bignum.h"
+#include "bignum.h"
 #include <stdio.h>
 
 int main() {

@@ -195,6 +195,8 @@ int test_kgt_vector(const char* filename) {
 int main() {
     printf("==== RSA-3072 Test Start ====\n");
 
+    test_bignum_divide();
+
     int overall_ok = 1;
 
     if (!test_ent_vector("./test/RSAES_(3072)(65537)(SHA256)_ENT.txt")) overall_ok = 0;
