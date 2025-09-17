@@ -18,11 +18,16 @@ typedef struct {
 
 // Bignum 초기화, 복사, 해제 함수
 void bignum_init(Bignum* bn);
+void bignum_set_zero(Bignum* bn);
 void bignum_copy(Bignum* dest, const Bignum* src);
 
 // 문자열과 Bignum 간 변환 함수 (16진수 권장)
 int bignum_from_hex(Bignum* bn, const char* hex_str);
 char* bignum_to_hex(const Bignum* bn);
+
+// Bignum 출력 함수
+// name: 같이 출력할 설명
+void print_bignum(const char* name, const Bignum* bn);
 
 // Bignum 비교 함수 (a > b -> 1, a < b -> -1, a == b -> 0)
 int bignum_compare(const Bignum* a, const Bignum* b);
@@ -33,9 +38,9 @@ void bignum_subtract(Bignum* result, const Bignum* a, const Bignum* b);
 void bignum_multiply(Bignum* result, const Bignum* a, const Bignum* b);
 void bignum_divide(Bignum* quotient, Bignum* remainder, const Bignum* a, const Bignum* b);
 
+// 모듈러 곱셈 (몽고 메리 곱셈)
+void bignum_mod_mul(Bignum* result, const Bignum* a, const Bignum* b, const Bignum* modulus);
+
 // 모듈러 거듭제곱 (RSA의 핵심 연산)
 // result = base^exp mod modulus
 void bignum_mod_exp(Bignum* result, const Bignum* base, const Bignum* exp, const Bignum* modulus);
-
-void bn_mod_mul(Bignum* r, const Bignum* a, const Bignum* b, const Bignum* m);
-void bignum_mod(Bignum* result, const Bignum* a, const Bignum* m);

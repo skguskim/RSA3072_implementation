@@ -1,17 +1,35 @@
 #include "rsa.h"
 #include <string.h>
 
+#define RSA_SUCCESS 0
+#define RSA_ERROR_NULL_ARGUMENT -1
+#define RSA_ERROR_MESSAGE_TOO_LARGE -2
+
 // RSA Ecryption
-void rsa_encrypt(Bignum* ciphertext, const Bignum* message, const RSA_PublicKey* pub_key) {
+int rsa_encrypt(Bignum* ciphertext, const Bignum* message, const RSA_PublicKey* pub_key) {
+	// input validation
+    if (ciphertext == NULL || message == NULL || pub_key == NULL) {
+        return RSA_ERROR_NULL_ARGUMENT;
+    }
+	
+	// RSA validation (message length < n)
+    if (bignum_compare(message, &pub_key->n) >= 0) {
+        return RSA_ERROR_MESSAGE_TOO_LARGE;
+    }
+
 	Bignum m_reduced;
-	bignum_mod(&m_reduced, message, &pub_key->n);
 	bignum_mod_exp(ciphertext, &m_reduced, &pub_key->e, &pub_key->n);
+	return RSA_SUCCESS;
 }
 
 // RSA Decryption
-void rsa_decrypt(Bignum* message, const Bignum* ciphertext, const RSA_PrivateKey* priv_key) {
+int rsa_decrypt(Bignum* message, const Bignum* ciphertext, const RSA_PrivateKey* priv_key) {
+	// input validation
+    if (message == NULL || ciphertext == NULL || priv_key == NULL) {
+        return RSA_ERROR_NULL_ARGUMENT;
+    }
+	
 	Bignum m_p, m_q, h;
-
 	// m_p = c^dP mod p
 	bignum_mod_exp(&m_p, ciphertext, &priv_key->dP, &priv_key->p);
 	// m_q = c^dQ mod q
@@ -25,25 +43,26 @@ void rsa_decrypt(Bignum* message, const Bignum* ciphertext, const RSA_PrivateKey
 	else {
 		bignum_subtract(&h, &m_p, &m_q);
 	}
-	bn_mod_mul(&h, &h, &priv_key->qInv, &priv_key->p);
+	bignum_mod_mul(&h, &h, &priv_key->qInv, &priv_key->p);
 	bignum_divide(NULL, &h, &h, &priv_key->p);
 
     // m = m_q + q * h
     Bignum temp;
 	bignum_multiply(&temp, &h, &priv_key->q);
 	bignum_add(message, &m_q, &temp);
+	return RSA_SUCCESS;
 }
 
 
 /* ========================================================================
- * ³»ºÎ À¯Æ¿
+ * ë‚´ë¶€ ìœ í‹¸
  * ===================================================================== */
-// 0 ÃÊ±âÈ­ + ÀÛÀº »ó¼ö ¼¼ÆÃ
+// 0 ì´ˆê¸°í™” + ìž‘ì€ ìƒìˆ˜ ì„¸íŒ…
 static void bignum_set_u32(Bignum* r, uint32_t v) {
-	bignum_init(r); // r->size = 0À¸·Î ÃÊ±âÈ­
+	bignum_init(r); // r->size = 0ìœ¼ë¡œ ì´ˆê¸°í™”
 
 	if (v == 0) {
-		// v°¡ 0ÀÌ¸é, size°¡ 0ÀÎ »óÅÂ ±×´ë·Î ¹ÝÈ¯
+		// vê°€ 0ì´ë©´, sizeê°€ 0ì¸ ìƒíƒœ ê·¸ëŒ€ë¡œ ë°˜í™˜
 		return;
 	}
 
@@ -51,7 +70,7 @@ static void bignum_set_u32(Bignum* r, uint32_t v) {
 	r->size = 1;
 }
 
-// a = a - v (v´Â ÀÛÀ½)
+// a = a - v (vëŠ” ìž‘ìŒ)
 static void bignum_sub_u32(Bignum* a, uint32_t v) {
 	Bignum t; bignum_set_u32(&t, v);
 	Bignum r; bignum_subtract(&r, a, &t);
@@ -79,7 +98,7 @@ static void bignum_lcm(Bignum* l, const Bignum* a, const Bignum* b) {
 	bignum_copy(l, &t);
 }
 
-// inv = a^{-1} mod m  (gcd(a,m)=1 °¡Á¤, ¹ÝÈ¯ 1=¼º°ø, 0=½ÇÆÐ)
+// inv = a^{-1} mod m  (gcd(a,m)=1 ê°€ì •, ë°˜í™˜ 1=ì„±ê³µ, 0=ì‹¤íŒ¨)
 static int bignum_modinv(Bignum* inv, const Bignum* a, const Bignum* m) {
 	Bignum r0, r1, t0, t1, zero;
 	bignum_copy(&r0, m);
@@ -94,7 +113,7 @@ static int bignum_modinv(Bignum* inv, const Bignum* a, const Bignum* m) {
 		bignum_copy(&r0, &r1);
 		bignum_copy(&r1, &r);
 
-		// ---- fix: (q*t1) % m ·Î Ãà¼ÒÇÑ µÚ t0¿¡¼­ »©±â ----
+		// ---- fix: (q*t1) % m ë¡œ ì¶•ì†Œí•œ ë’¤ t0ì—ì„œ ë¹¼ê¸° ----
 		Bignum q_t1, q_t1_mod, tmp;
 		bignum_multiply(&q_t1, &q, &t1);
 		bignum_mod(&q_t1_mod, &q_t1, m);    // q_t1_mod = (q*t1) % m
@@ -120,19 +139,19 @@ static int bignum_modinv(Bignum* inv, const Bignum* a, const Bignum* m) {
 	return 1;
 }
 
-// e ¼±ÅÃ: 65537 ±âº», gcd(e, ¥ë(n))=1 º¸ÀåµÇµµ·Ï Áõ°¡
+// e ì„ íƒ: 65537 ê¸°ë³¸, gcd(e, Î»(n))=1 ë³´ìž¥ë˜ë„ë¡ ì¦ê°€
 static void pick_public_exponent(Bignum* e, const Bignum* lambda_n) {
 	Bignum g, one, two; bignum_set_u32(e, 65537); bignum_set_u32(&one, 1); bignum_set_u32(&two, 2);
 	while (1) {
 		bignum_gcd(&g, e, lambda_n);
 		if (bignum_compare(&g, &one) == 0) break;
-		Bignum t; bignum_add(&t, e, &two); bignum_copy(e, &t);	// È¦¼ö¸¸
+		Bignum t; bignum_add(&t, e, &two); bignum_copy(e, &t);	// í™€ìˆ˜ë§Œ
 	}
 }
 
 
 /* ========================================================================
- * Å° »ý¼º
+ * í‚¤ ìƒì„±
  * ===================================================================== */
 void rsa_generate_keys(RSA_PublicKey* pub_key, RSA_PrivateKey* priv_key, const Bignum* p, const Bignum* q) {
 	// n = p*q
@@ -142,27 +161,27 @@ void rsa_generate_keys(RSA_PublicKey* pub_key, RSA_PrivateKey* priv_key, const B
 	Bignum p1, q1; bignum_copy(&p1, p); bignum_sub_u32(&p1, 1);
 	bignum_copy(&q1, q); bignum_sub_u32(&q1, 1);
 
-	// ¥ë(n) = lcm(p-1, q-1)
+	// Î»(n) = lcm(p-1, q-1)
 	Bignum lambda_n; bignum_lcm(&lambda_n, &p1, &q1);
 
-	// e ¼±ÅÃ
+	// e ì„ íƒ
 	Bignum e; pick_public_exponent(&e, &lambda_n);
 	
-	// d = e^(-1) mod ¥ë(n)
+	// d = e^(-1) mod Î»(n)
 	Bignum d;
 	if (!bignum_modinv(&d, &e, &lambda_n)) {
-		// ÀÌ·Ð»ó pick_public_exponent°¡ º¸ÀåÇÏÁö¸¸, ¹æ¾îÀûÀ¸·Î Ã³¸®
-		// e¸¦ 65537+2k·Î ¿Ã¸®¸ç Àç½ÃµµÇØµµ µÇÁö¸¸, ¿©±â¼­´Â 0 ¼¼ÆÃ ÈÄ ¹ÝÈ¯
+		// ì´ë¡ ìƒ pick_public_exponentê°€ ë³´ìž¥í•˜ì§€ë§Œ, ë°©ì–´ì ìœ¼ë¡œ ì²˜ë¦¬
+		// eë¥¼ 65537+2kë¡œ ì˜¬ë¦¬ë©° ìž¬ì‹œë„í•´ë„ ë˜ì§€ë§Œ, ì—¬ê¸°ì„œëŠ” 0 ì„¸íŒ… í›„ ë°˜í™˜
 		bignum_set_u32(&d, 0);
 	}
 
-	// CRT ÆÄ¶ó¹ÌÅÍ
+	// CRT íŒŒë¼ë¯¸í„°
 	Bignum dP, dQ, qInv;
 	bignum_mod(&dP, &d, &p1);	// d mod (p-1)
 	bignum_mod(&dQ, &d, &q1);	// d mod (q-1)
 	bignum_modinv(&qInv, q, p);	// q^(-1) mod p
 
-	// °á°ú ÀúÀå
+	// ê²°ê³¼ ì €ìž¥
 	bignum_copy(&pub_key->n, &n);
 	bignum_copy(&pub_key->e, &e);
 

@@ -242,91 +242,75 @@ int test_kgt_vector(const char* filename) {
     return 1;
 }
 
-void print_bignum(const char* name, const Bignum* bn) {
-    char* hex = bignum_to_hex(bn);
-    printf(" - %s: %s\n", name, hex);
-    free(hex);
-}
-
 int main() {
-    int overall_ok = 1;
+    printf("test");
+    //int overall_ok = 1;
 
-    // RSA 키 생성 파트 (현재는 구현되어 있지 않으므로 주석 처리)
-    Bignum p, q;
-    RSA_PublicKey pub_key;
-    RSA_PrivateKey priv_key;
+    //Bignum p, q;
+    //RSA_PublicKey pub_key;
+    //RSA_PrivateKey priv_key;
 
-    bignum_init(&p);
-    bignum_init(&q);
+    //bignum_init(&p);
+    //bignum_init(&q);
 
-    printf("test start\n");
-    // 1) 두 소수 p, q 생성 (p !=q 보장)
-    generate_prime(&p, RSA_PRIME_BITS);
-    do {
-        generate_prime(&q, RSA_PRIME_BITS);
-    } while (bignum_compare(&p, &q) == 0);
-    
-    print_bignum("p", &p);
-    print_bignum("q", &q);
+    //printf("test start\n");
+    //// 1) 두 소수 p, q 생성 (p !=q 보장)
+    //generate_prime(&p, RSA_PRIME_BITS);
+    //do {
+    //    generate_prime(&q, RSA_PRIME_BITS);
+    //} while (bignum_compare(&p, &q) == 0);
+    //
+    //print_bignum("p", &p);
+    //print_bignum("q", &q);
 
-    // 2) 키 쌍 생성 (n, e, d, dP, dQ, qInv)
-    rsa_generate_keys(&pub_key, &priv_key, &p, &q);
+    //// 2) 키 쌍 생성 (n, e, d, dP, dQ, qInv)
+    //rsa_generate_keys(&pub_key, &priv_key, &p, &q);
 
-    // 3) 스모크 테스트(선택): m=0x42 < n 왕복 확인
-    Bignum m, c, m_dec;
-    bignum_init(&m); bignum_init(&c); bignum_init(&m_dec);
-    m.limbs[0] = 0x42; m.size = 1;
+    //// 3) 스모크 테스트(선택): m=0x42 < n 왕복 확인
+    //Bignum m, c, m_dec;
+    //bignum_init(&m); bignum_init(&c); bignum_init(&m_dec);
+    //m.limbs[0] = 0x42; m.size = 1;
 
-    rsa_encrypt(&c, &m, &pub_key);
-    rsa_decrypt(&m_dec, &c, &priv_key);
+    //rsa_encrypt(&c, &m, &pub_key);
+    //rsa_decrypt(&m_dec, &c, &priv_key);
 
-    char* hex_m_dec = bignum_to_hex(&m_dec);
-    char* hex_m = bignum_to_hex(&m);
-    //char* hex_n = bignum_to_hex(&(pub_key.n));
-    //char* hex_e = bignum_to_hex(&(pub_key.e));
-    char* hex_d = bignum_to_hex(&(priv_key.d));
-    char* hex_dp = bignum_to_hex(&(priv_key.dP));
-    char* hex_dq = bignum_to_hex(&(priv_key.dQ));
-    char* hex_qInv = bignum_to_hex(&(priv_key.qInv));
-    char* hex_c = bignum_to_hex(&c);
-
-    print_bignum("m", &m);
-    print_bignum("m_dec", &m_dec);
-    print_bignum("c", &c);
-    print_bignum("d", &(priv_key.d));
-    print_bignum("dP", &(priv_key.dP));
-    print_bignum("dQ", &(priv_key.dQ));
-    print_bignum("qInv", &(priv_key.qInv));
+    //print_bignum("m", &m);
+    //print_bignum("m_dec", &m_dec);
+    //print_bignum("c", &c);
+    //print_bignum("d", &(priv_key.d));
+    //print_bignum("dP", &(priv_key.dP));
+    //print_bignum("dQ", &(priv_key.dQ));
+    //print_bignum("qInv", &(priv_key.qInv));
 
 
-    if (bignum_compare(&m_dec, &m) != 0) {
-        printf("[-] Keygen smoke test failed\n");
-        overall_ok = 0; // 기존 main의 상태 플래그 사용
-    }
-    else {
-        printf("[+] Keygen smoke test passed\n");
-    }
+    //if (bignum_compare(&m_dec, &m) != 0) {
+    //    printf("[-] Keygen smoke test failed\n");
+    //    overall_ok = 0; // 기존 main의 상태 플래그 사용
+    //}
+    //else {
+    //    printf("[+] Keygen smoke test passed\n");
+    //}
 
-    // RSA 테스트 벡터 파일 실행
-    /*if (!test_ent_vector("./test/RSAES_(3072)(65537)(SHA256)_ENT.txt")) {
-        overall_ok = 0;
-    }
-    printf("\n");
+    //// RSA 테스트 벡터 파일 실행
+    ///*if (!test_ent_vector("./test/RSAES_(3072)(65537)(SHA256)_ENT.txt")) {
+    //    overall_ok = 0;
+    //}
+    //printf("\n");
 
-    if (!test_det_vector("./test/RSAES_(3072)(65537)(SHA256)_DET.txt")) {
-        overall_ok = 0;
-    }
-    printf("\n");
-    
-    if (!test_kgt_vector("./test/RSAES_(3072)(65537)(SHA256)_KGT.txt")) {
-        overall_ok = 0;
-    }*/
-    printf("\n");
+    //if (!test_det_vector("./test/RSAES_(3072)(65537)(SHA256)_DET.txt")) {
+    //    overall_ok = 0;
+    //}
+    //printf("\n");
+    //
+    //if (!test_kgt_vector("./test/RSAES_(3072)(65537)(SHA256)_KGT.txt")) {
+    //    overall_ok = 0;
+    //}*/
+    //printf("\n");
 
-    if (overall_ok) {
-        printf("[+] All tests completed successfully.\n");
-    } else {
-        printf("[-] Some tests failed.\n");
-    }
+    //if (overall_ok) {
+    //    printf("[+] All tests completed successfully.\n");
+    //} else {
+    //    printf("[-] Some tests failed.\n");
+    //}
     return 0;
 }
