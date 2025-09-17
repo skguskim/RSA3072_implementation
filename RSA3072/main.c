@@ -80,8 +80,9 @@ int test_det_vector(const char* filename) {
     char line[4096], key[64], value[4096];
     Bignum n, e, C, C_actual;
     unsigned char msg_bytes[1024], seed_bytes[32], em_bytes[RSA_KEY_BITS/8];
-    size_t msg_len = 0, seed_len = 0;
-
+    Bignum M;
+    uint8_t seed = 0;
+    bignum_init(&M);
     int test_passed = 1, test_count = 0, test_ready = 0;
 
     while (fgets(line, sizeof(line), fp)) {
@@ -91,9 +92,9 @@ int test_det_vector(const char* filename) {
             } else if (strcmp(key, "e ") == 0) {
                 bignum_init(&e); bignum_from_hex(&e, value);
             } else if (strcmp(key, "M ") == 0) {
-                msg_len = hex_to_bytes(value, msg_bytes, sizeof(msg_bytes));
+                bignum_from_hex(&M, value);
             } else if (strcmp(key, "Seed ") == 0) {
-                seed_len = hex_to_bytes(value, seed_bytes, sizeof(seed_bytes));
+                seed = bignum_from_hex(value, seed_bytes, sizeof(seed_bytes));
             } else if (strcmp(key, "C ") == 0) {
                 bignum_init(&C); bignum_from_hex(&C, value);
                 test_ready = 1;
@@ -103,7 +104,7 @@ int test_det_vector(const char* filename) {
             test_count++;
 
             int rsa_size_bytes = RSA_KEY_BITS / 8;
-            rsa_oaep_pad(em_bytes, msg_bytes, msg_len, rsa_size_bytes, seed_bytes);
+            rsa_oaep_encode(em_bytes, "", &M, RSA_KEY_BITS, seed);
 
             Bignum em_bn;
             bignum_init(&em_bn);
@@ -196,6 +197,7 @@ int main() {
     printf("==== RSA-3072 Test Start ====\n");
 
     test_bignum_divide();
+    test_bignum_modexp();
 
     int overall_ok = 1;
 
