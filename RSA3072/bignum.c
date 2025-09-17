@@ -524,13 +524,13 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
     // 1.나눗셈의 안정화를 위한 정규화(스케일 조정)
     // divisor(V)의 최상위 워드가 1이 되기 위한 시프트 비트 수(s) 계산
     uint32_t v_high = V.limbs[V.size - 1]; // v_high: 제수의 최상위 워드
-    int s = 0;
+    int norm_shift = 0;
     if (v_high < 0x80000000u) {
-        while ((v_high & 0x80000000u) == 0u) { v_high <<= 1; s++; }
+        while ((v_high & 0x80000000u) == 0u) { v_high <<= 1; norm_shift++; }
     }
-    if (s) {
-        bn_shift_left(&U, s);
-        bn_shift_left(&V, s);
+    if (norm_shift) {
+        bn_shift_left(&U, norm_shift);
+        bn_shift_left(&V, norm_shift);
     }
 
     int n = V.size;                   // n : 제수(divisor) 길이
@@ -540,87 +540,87 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
         return;
     }
 
-    // 배열로 작업 (Up: 길이 n+m+1, Vp: 길이 n)
-    uint32_t Up[MAX_LIMBS + 1] = { 0 };
-    uint32_t Vp[MAX_LIMBS] = { 0 };
+    // 2. 배열로 작업 (Up: 길이 n+m+1, Vp: 길이 n)
+    uint32_t U_prime[MAX_LIMBS + 1] = { 0 };
+    uint32_t V_prime[MAX_LIMBS] = { 0 };
 
-    for (int i = 0; i < U.size && i < MAX_LIMBS + 1; ++i) Up[i] = U.limbs[i];
-    for (int i = 0; i < n && i < MAX_LIMBS; ++i)          Vp[i] = V.limbs[i];
+    // U, V 값을 Up, Vp 배열에 복사
+    for (int i = 0; i < U.size && i < MAX_LIMBS + 1; ++i) U_prime[i] = U.limbs[i];
+    for (int i = 0; i < n && i < MAX_LIMBS; ++i)          V_prime[i] = V.limbs[i];
 
     // 몫 워드 버퍼
-    uint32_t Qp[MAX_LIMBS] = { 0 };
+    uint32_t Q_prime[MAX_LIMBS] = { 0 };
     int q_len = m + 1;
-    if (q_len > MAX_LIMBS) q_len = MAX_LIMBS;  //여기까지 수정완료&변수명 업데이트 예정
+    if (q_len > MAX_LIMBS) q_len = MAX_LIMBS;
 
-    // 메인 루프: j = m down to 0
+    // 3. 몫 자리 초깃값 q_hat 추정(몫을 추정할 때 필요한 건 u의 최상위 두 워드)
     for (int j = m; j >= 0; --j) {
-        // D3: qhat, rhat 추정 (상위 두 워드 사용)
-        uint64_t u2 = Up[j + n];          // 상위 워드
-        uint64_t u1 = Up[j + n - 1];
-        uint64_t u0 = (n >= 2) ? Up[j + n - 2] : 0;
+        uint64_t u2 = U_prime[j + n];          // 상위 워드
+        uint64_t u1 = U_prime[j + n - 1];
+        uint64_t u0 = (n >= 2) ? U_prime[j + n - 2] : 0;
 
-        uint64_t v1 = Vp[n - 1];
-        uint64_t v0 = (n >= 2) ? Vp[n - 2] : 0;
+        uint64_t v1 = V_prime[n - 1];
+        uint64_t v0 = (n >= 2) ? V_prime[n - 2] : 0;
 
         uint64_t uhat = (u2 << 32) | u1;
-        uint64_t qhat = uhat / v1;
-        uint64_t rhat = uhat % v1;
-        if (qhat > 0xFFFFFFFFull) qhat = 0xFFFFFFFFull;
+        uint64_t q_hat = uhat / v1;
+        uint64_t r_hat = uhat % v1;
+        if (q_hat > 0xFFFFFFFFull) q_hat = 0xFFFFFFFFull;
 
         // 과추정 보정
         if (n > 1) {
-            while (qhat * v0 > ((rhat << 32) | u0)) {
-                qhat--;
-                rhat += v1;
-                if (rhat >= (1ull << 32)) break; // rhat overflow 시 중지
+            while (q_hat * v0 > ((r_hat << 32) | u0)) {
+                q_hat--;
+                r_hat += v1;
+                if (r_hat >= (1ull << 32)) break; // rhat overflow 시 중지
             }
         }
 
-        // D4: Up[j..j+n] -= qhat * Vp[0..n-1]
+        // 4. 나머지 계산 : U - q_hat * V
         uint64_t borrow = 0;
-        uint64_t carrymul = 0;
+        uint64_t carry_mul = 0;
         for (int i = 0; i < n; ++i) {
-            uint64_t p = qhat * Vp[i] + carrymul;
-            carrymul = p >> 32;
-            uint64_t diff = (uint64_t)Up[j + i] - (uint32_t)p - borrow;
-            Up[j + i] = (uint32_t)diff;
+            uint64_t p = q_hat * V_prime[i] + carry_mul;
+            carry_mul = p >> 32;
+            uint64_t diff = (uint64_t)U_prime[j + i] - (uint32_t)p - borrow;
+            U_prime[j + i] = (uint32_t)diff;
             borrow = (diff >> 63) & 1u;
         }
         // 상위 워드까지 반영
-        uint64_t diff = (uint64_t)Up[j + n] - carrymul - borrow;
-        Up[j + n] = (uint32_t)diff;
+        uint64_t diff = (uint64_t)U_prime[j + n] - carry_mul - borrow;
+        U_prime[j + n] = (uint32_t)diff;
         borrow = (diff >> 63) & 1u;
 
-        // D5: borrow면 add back, qhat--
+        // 5. borrow면 add back
         if (borrow) {
             uint64_t carry2 = 0;
             for (int i = 0; i < n; ++i) {
-                uint64_t ssum = (uint64_t)Up[j + i] + Vp[i] + carry2;
-                Up[j + i] = (uint32_t)ssum;
-                carry2 = ssum >> 32;
+                uint64_t s_sum = (uint64_t)U_prime[j + i] + V_prime[i] + carry2;
+                U_prime[j + i] = (uint32_t)s_sum;
+                carry2 = s_sum >> 32;
             }
-            Up[j + n] += (uint32_t)carry2;
-            qhat--;
+            U_prime[j + n] += (uint32_t)carry2;
+            q_hat--;
         }
 
-        // 몫 자리 기록
-        if (j < q_len) Qp[j] = (uint32_t)qhat;
+        // 6. 몫 자리 기록
+        if (j < q_len) Q_prime[j] = (uint32_t)q_hat;
     }
 
-    // 몫 복사
+    // 7. 몫 복사
     quotient->size = q_len;
-    for (int i = 0; i < q_len; ++i) quotient->limbs[i] = Qp[i];
+    for (int i = 0; i < q_len; ++i) quotient->limbs[i] = Q_prime[i];
     bn_normalize(quotient);
 
-    // 나머지: Up[0..n-1] 를 비정규화 복구 (s비트 오른쪽 시프트)
-    Bignum Rtmp; bn_zero(&Rtmp);
-    Rtmp.size = n;
-    if (Rtmp.size > MAX_LIMBS) Rtmp.size = MAX_LIMBS;
-    for (int i = 0; i < Rtmp.size; ++i) Rtmp.limbs[i] = Up[i];
+    // 8. 나머지: Up[0..n-1] 를 비정규화 복구 (s비트 오른쪽 시프트)
+    Bignum R_tmp; bn_zero(&R_tmp);
+    R_tmp.size = n;
+    if (R_tmp.size > MAX_LIMBS) R_tmp.size = MAX_LIMBS;
+    for (int i = 0; i < R_tmp.size; ++i) R_tmp.limbs[i] = U_prime[i];
 
-    if (s) bn_shift_right(&Rtmp, s);
-    bn_normalize(&Rtmp);
-    bignum_copy(remainder, &Rtmp);
+    if (norm_shift) bn_shift_right(&R_tmp, norm_shift);
+    bn_normalize(&R_tmp);
+    bignum_copy(remainder, &R_tmp);
 }
 
 
