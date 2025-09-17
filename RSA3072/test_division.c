@@ -1,7 +1,7 @@
 #include "bignum.h"
 #include <stdio.h>
 
-int main() {
+int test_bignum_divide() {
     Bignum a, b, quotient, remainder;
 
     // Initialize
