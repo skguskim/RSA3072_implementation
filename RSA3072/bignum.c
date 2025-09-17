@@ -599,7 +599,7 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
                 U_prime[j + i] = (uint32_t)s_sum;
                 carry2 = s_sum >> 32;
             }
-            U_prime[j + n] += (uint32_t)carry2;
+            U_prime[j + n] += (uint32_t)carry2; 
             q_hat--;
         }
 
