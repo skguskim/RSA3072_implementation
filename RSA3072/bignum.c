@@ -552,7 +552,6 @@ void bignum_mod_exp(Bignum* result, const Bignum* base, const Bignum* exp, const
     one.size = 1;
     Bignum res_bar;
     bignum_init(&res_bar);
-
     mont_mul(&res_bar, &one, &RR, modulus, n0prime);
 
     // --- 지수승 루프 (LSB-first) ---

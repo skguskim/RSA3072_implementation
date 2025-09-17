@@ -243,7 +243,8 @@ int test_kgt_vector(const char* filename) {
 }
 
 int main() {
-    printf("test");
+    printf("test start\n");
+
     //int overall_ok = 1;
 
     //Bignum p, q;
