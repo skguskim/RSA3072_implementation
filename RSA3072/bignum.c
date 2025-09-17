@@ -478,26 +478,26 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
     bn_zero(quotient);
     bn_zero(remainder);
 
-    // divide by zero: 조용히 리턴 (필요시 에러 처리)
+    // 나눗셈 예외 처리 : (필요시 에러 처리)
     if (bn_is_zero(b) || bn_is_zero(a)) return;
 
     int cmp = bn_ucmp(a, b);
-    if (cmp < 0) { // a < b
+    if (cmp < 0) { // a < b -> 몫 0, 나머지 a
         bignum_copy(remainder, a);
         return;
     }
-    if (cmp == 0) { // a == b
+    if (cmp == 0) { // a == b-> 몫 1, 나머지 0
         quotient->limbs[0] = 1;
         quotient->size = 1;
         return;
     }
 
-    // 1워드 divisor 빠른 경로
+    // 1워드 제수(divisor) 빠른 경로
     if (b->size == 1) {
         uint32_t divisor = b->limbs[0];
         uint64_t rem = 0;
 
-        quotient->size = a->size;
+        quotient->size = a->size; // 몫의 최대 길이 == 피제수(dividend)의 길이 
         for (int i = a->size - 1; i >= 0; --i) {
             uint64_t cur = (rem << 32) | a->limbs[i];
             quotient->limbs[i] = (uint32_t)(cur / divisor);
@@ -511,8 +511,8 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
     }
 
     // Knuth Algorithm D
-
     // 정규화: 제수 최상위 워드에 leading 1이 오도록 왼쪽으로 s비트 시프트
+    // V : divisor, U : dividend
     Bignum U, V;
     bignum_copy(&U, a);
     bignum_copy(&V, b);
@@ -528,7 +528,7 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
     }
 
     int n = V.size;                   // length of divisor
-    int m = U.size - n;               // 몫 자리수-1 (j는 m..0)
+    int m = U.size - n;               // 몫 자리수-1
     if (m < 0) {                      // 방어
         bignum_copy(remainder, a);
         return;
