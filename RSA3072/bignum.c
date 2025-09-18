@@ -814,12 +814,12 @@ static void mont_compute_RR(Bignum* RR, const Bignum* N) {
     }
 }
 
-static void bignum_mod(Bignum* r, const Bignum* x, const Bignum* N) {
-    if (!r || !x || !N || N->size == 0) { bignum_set_zero(r); return; }
-    if (bn_ucmp(x, N) < 0) { bignum_copy(r, x); return; }
-    Bignum q, rem;
-    bignum_divide(&q, &rem, x, N);
-    bignum_copy(r, &rem);
+// a <- a mod N (단순 반복 감산; a가 N보다 훨씬 크면 비효율적)
+static void bn_reduce_simple(Bignum* a, const Bignum* N) {
+    bn_normalize(a);
+    while (bn_ucmp(a, N) >= 0) {
+        bn_usub(a, a, N);
+    }
 }
 
 // ========= API 함수 =========
@@ -836,17 +836,28 @@ void bignum_mod_mul(Bignum* result, const Bignum* a, const Bignum* b, const Bign
         return;
     }
 
+    // 1) 파라미터
     const uint32_t n0prime = mont_n0prime(modulus->limbs[0]);
-    Bignum RR; mont_compute_RR(&RR, modulus);
+    Bignum RR;
+    mont_compute_RR(&RR, modulus);
 
-    Bignum A, B;
-    bignum_mod(&A, a, modulus);
-    bignum_mod(&B, b, modulus);
+    // 2) 입력을 N으로 감축
+    Bignum A;
+    bignum_copy(&A, a);
+    bn_reduce_simple(&A, modulus);
+    Bignum B;
+    bignum_copy(&B, b);
+    bn_reduce_simple(&B, modulus);
 
+    // 3) 몽고메리 영역으로 진입
     Bignum Abar, Bbar, Zbar;
     mont_to(&Abar, &A, modulus, n0prime, &RR);
     mont_to(&Bbar, &B, modulus, n0prime, &RR);
+
+    // 4) 곱(몽고메리 상태)
     mont_mul(&Zbar, &Abar, &Bbar, modulus, n0prime);
+
+    // 5) 복귀
     mont_from(result, &Zbar, modulus, n0prime);
 }
 
@@ -885,8 +896,8 @@ void bignum_mod_exp(Bignum* result, const Bignum* base, const Bignum* exp, const
 
     // a = base mod N (mont_mul은 a,b < N 가정으로 사용하는 게 안전)
     Bignum a;
-    bignum_init(&a);
-    bignum_mod(&a, &base, modulus);
+    bignum_copy(&a, base);
+    bn_reduce_simple(&a, modulus);
 
     // a_bar = a * R mod N = MonPro(a, RR)
     Bignum a_bar;
