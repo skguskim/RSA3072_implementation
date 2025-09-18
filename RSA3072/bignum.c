@@ -552,7 +552,7 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
 
     // Knuth Algorithm D
     // 정규화: 제수 최상위 워드에 leading 1이 오도록 왼쪽으로 s비트 시프트
-    // V : divisor, U : dividend
+    // V : divisor, U : dividend (U÷V의 연산)
     Bignum U, V;
     bignum_copy(&U, a);
     bignum_copy(&V, b);
@@ -577,7 +577,7 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
     }
 
     // 2. 배열로 작업 (U_prime: 길이 n+m+1, V_prime: 길이 n)
-    uint32_t U_prime[MAX_LIMBS + 1] = { 0 }; 
+    uint32_t U_prime[MAX_LIMBS + 1] = { 0 };
     uint32_t V_prime[MAX_LIMBS] = { 0 };
 
     // U, V 값을 U_prime, V_prime 배열에 복사
@@ -589,9 +589,9 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
     int q_len = m + 1;
     if (q_len > MAX_LIMBS) q_len = MAX_LIMBS;
 
-    // 3. 몫 자리 초깃값 q_hat 추정(몫을 추정할 때 필요한 건 u의 최상위 두 워드)
+    // 3. 몫 자리 초깃값 추정 q_hat 추정(U의 최상위 두 워드 ÷ V의 최상위 워드)
     for (int j = m; j >= 0; --j) {
-        uint64_t u2 = U_prime[j + n];          // 상위 워드
+        uint64_t u2 = U_prime[j + n];
         uint64_t u1 = U_prime[j + n - 1];
         uint64_t u0 = (n >= 2) ? U_prime[j + n - 2] : 0;
 
@@ -627,7 +627,7 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
         U_prime[j + n] = (uint32_t)diff;
         borrow = (diff >> 63) & 1u;
 
-        // 5. borrow면 add back
+        // 5. borrow(뺄셈 결과가 음수)면 add back
         if (borrow) {
             uint64_t carry2 = 0;
             for (int i = 0; i < n; ++i) {
@@ -648,7 +648,7 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
     for (int i = 0; i < q_len; ++i) quotient->limbs[i] = Q_prime[i];
     bn_normalize(quotient);
 
-    // 8. 나머지: Up[0..n-1] 를 비정규화 복구 (s비트 오른쪽 시프트)
+    // 8. 나머지를 비정규화 복구 (s비트 오른쪽 시프트)
     Bignum R_tmp; bn_zero(&R_tmp);
     R_tmp.size = n;
     if (R_tmp.size > MAX_LIMBS) R_tmp.size = MAX_LIMBS;
