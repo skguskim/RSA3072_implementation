@@ -65,14 +65,20 @@ void bn_set_bit_local(Bignum* bn, int bit_index) {
 // a: 비트 길이를 확인할 큰 수 포인터
 // 반환값: 비트 길이
 static int bn_bit_length(const Bignum* a) {
-    if (a->size == 0) return 0;
-    uint32_t ms = a->limbs[a->size - 1];
-    int bits = (a->size - 1) * (int)LIMB_BITS;
-    int leading = 32;
-    while (leading > 0 && ((ms >> (leading - 1)) & 1u) == 0u) leading--;
-    return bits + leading;
-}
+    if (!a || a->size == 0) return 0;
+    // 상위 0 limb가 있으면 무시
+    int n = a->size;
+    while (n > 0 && a->limbs[n - 1] == 0u) --n;
+    if (n == 0) return 0;
 
+    uint32_t ms = a->limbs[n - 1];
+    int leading = 0;
+    // ms != 0 보장
+    for (int b = 31; b >= 0; --b) {
+        if ((ms >> b) & 1u) { leading = b + 1; break; }
+    }
+    return (n - 1) * 32 + leading;
+}
 // 큰 수 a를 0으로 변경
 // a: 0으로 바꿀 큰 수 포인터
 // 반환값: 없음
@@ -136,62 +142,76 @@ static void bn_mul_small(Bignum* r, uint32_t k) {
 }
 
 // n비트 왼쪽 시프트 (a <<= n)
-static void bn_shift_left(Bignum* a, const int shift) {
-    if (shift <= 0 || a->size == 0) return;
-    int limb_shift = shift / (int)LIMB_BITS;
+static void bn_shift_left(Bignum* a, int shift) {
+    if (!a || shift <= 0 || a->size == 0) return;
+
+    int limb_shift = shift / (int)LIMB_BITS;   // 32비트 단위
     int bit_shift = shift % (int)LIMB_BITS;
 
-    if (a->size + limb_shift >= MAX_LIMBS) {
-        // 포화 방지: 가능한 한도까지만 밀고 나머지는 버림
-        limb_shift = (MAX_LIMBS - 1) - a->size;
-        if (limb_shift < 0) limb_shift = 0;
+    // 용량 초과 방지: 상위 잘림 정책(포화)
+    if (limb_shift >= MAX_LIMBS) { bn_zero(a); return; }
+
+    uint32_t out[MAX_LIMBS] = { 0 };
+
+    // 1) limb 단위 이동
+    int src_size = a->size;
+    int dst_start = limb_shift;
+    int dst_size = src_size + limb_shift;
+    if (dst_size > MAX_LIMBS) dst_size = MAX_LIMBS;
+
+    for (int i = src_size - 1; i >= 0; --i) {
+        int di = i + limb_shift;
+        if (di < MAX_LIMBS) out[di] = a->limbs[i];
     }
 
-    uint32_t tmp[MAX_LIMBS] = { 0 };
-    uint32_t carry = 0;
-    for (int i = 0; i < a->size && i + limb_shift < MAX_LIMBS; ++i) {
-        uint32_t lo = (bit_shift == 0) ? a->limbs[i] : (a->limbs[i] << bit_shift);
-        uint32_t hi = (bit_shift == 0) ? 0 : (a->limbs[i] >> (32 - bit_shift));
-        uint64_t v = (uint64_t)lo + ((uint64_t)carry);
-        tmp[i + limb_shift] = (uint32_t)v;
-        carry = (uint32_t)(v >> 32);
-        if (i + limb_shift + 1 < MAX_LIMBS) {
-            // hi는 다음 워드로 더해짐
-            uint64_t w = (uint64_t)tmp[i + limb_shift + 1] + hi;
-            tmp[i + limb_shift + 1] = (uint32_t)w;
-            if (w >> 32) carry += 1u;
+    // 2) 비트 단위 이동
+    if (bit_shift != 0) {
+        uint32_t carry = 0;
+        for (int i = dst_start; i < dst_size; ++i) {
+            uint64_t v = ((uint64_t)out[i] << bit_shift) | carry;
+            out[i] = (uint32_t)v;
+            carry = (uint32_t)(v >> 32);
+        }
+        if (carry && dst_size < MAX_LIMBS) {
+            out[dst_size++] = carry;
         }
     }
 
-    int new_size = a->size + limb_shift + 1;
-    if (new_size > MAX_LIMBS) new_size = MAX_LIMBS;
-    memcpy(a->limbs, tmp, sizeof(uint32_t) * new_size);
-    a->size = new_size;
+    memcpy(a->limbs, out, sizeof(uint32_t) * dst_size);
+    // 나머지 상위 워드는 0으로
+    for (int i = dst_size; i < MAX_LIMBS; ++i) a->limbs[i] = 0;
+    a->size = dst_size;
     bn_normalize(a);
 }
 
 // n비트 오른쪽 시프트 (a >>= n)
-static void bn_shift_right(Bignum* a, const int shift) {
-    if (shift <= 0 || a->size == 0) return;
+static void bn_shift_right(Bignum* a, int shift) {
+    if (!a || shift <= 0 || a->size == 0) return;
+
     int limb_shift = shift / (int)LIMB_BITS;
     int bit_shift = shift % (int)LIMB_BITS;
 
     if (limb_shift >= a->size) { bn_zero(a); return; }
 
-    uint32_t tmp[MAX_LIMBS] = { 0 };
-    int j = 0;
-    for (int i = limb_shift; i < a->size; ++i, ++j) {
-        uint32_t cur = a->limbs[i];
-        uint32_t prev = (i + 1 < a->size) ? a->limbs[i + 1] : 0;
-        if (bit_shift == 0) {
-            tmp[j] = cur;
-        }
-        else {
-            tmp[j] = (cur >> bit_shift) | (prev << (32 - bit_shift));
+    uint32_t out[MAX_LIMBS] = { 0 };
+
+    int new_size = a->size - limb_shift;
+    for (int i = 0; i < new_size; ++i) {
+        out[i] = a->limbs[i + limb_shift];
+    }
+
+    if (bit_shift != 0) {
+        uint32_t carry = 0;
+        for (int i = new_size - 1; i >= 0; --i) {
+            uint32_t cur = out[i];
+            out[i] = (cur >> bit_shift) | (carry << (32 - bit_shift));
+            carry = cur & ((1u << bit_shift) - 1u);
         }
     }
-    memcpy(a->limbs, tmp, sizeof(uint32_t) * j);
-    a->size = j;
+
+    memcpy(a->limbs, out, sizeof(uint32_t) * new_size);
+    for (int i = new_size; i < MAX_LIMBS; ++i) a->limbs[i] = 0;
+    a->size = new_size;
     bn_normalize(a);
 }
 
@@ -746,6 +766,7 @@ static void mont_mul(Bignum* r, const Bignum* a, const Bignum* b, const Bignum* 
 
         // t = t / b (워드 1칸 오른쪽 시프트) : 고정 길이
         for (int k = 0; k < n; ++k) t[k] = t[k + 1];
+        t[n] = t[n + 1];
         t[n + 1] = 0;
     }
 
@@ -793,12 +814,12 @@ static void mont_compute_RR(Bignum* RR, const Bignum* N) {
     }
 }
 
-// a <- a mod N (단순 반복 감산; a가 N보다 훨씬 크면 비효율적)
-static void bn_reduce_simple(Bignum* a, const Bignum* N) {
-    bn_normalize(a);
-    while (bn_ucmp(a, N) >= 0) {
-        bn_usub(a, a, N);
-    }
+static void bignum_mod(Bignum* r, const Bignum* x, const Bignum* N) {
+    if (!r || !x || !N || N->size == 0) { bignum_set_zero(r); return; }
+    if (bn_ucmp(x, N) < 0) { bignum_copy(r, x); return; }
+    Bignum q, rem;
+    bignum_divide(&q, &rem, x, N);
+    bignum_copy(r, &rem);
 }
 
 // ========= API 함수 =========
@@ -815,28 +836,17 @@ void bignum_mod_mul(Bignum* result, const Bignum* a, const Bignum* b, const Bign
         return;
     }
 
-    // 1) 파라미터
     const uint32_t n0prime = mont_n0prime(modulus->limbs[0]);
-    Bignum RR;
-    mont_compute_RR(&RR, modulus);
+    Bignum RR; mont_compute_RR(&RR, modulus);
 
-    // 2) 입력을 N으로 감축
-    Bignum A;
-    bignum_copy(&A, a);
-    bn_reduce_simple(&A, modulus);
-    Bignum B;
-    bignum_copy(&B, b);
-    bn_reduce_simple(&B, modulus);
+    Bignum A, B;
+    bignum_mod(&A, a, modulus);
+    bignum_mod(&B, b, modulus);
 
-    // 3) 몽고메리 영역으로 진입
     Bignum Abar, Bbar, Zbar;
     mont_to(&Abar, &A, modulus, n0prime, &RR);
     mont_to(&Bbar, &B, modulus, n0prime, &RR);
-
-    // 4) 곱(몽고메리 상태)
     mont_mul(&Zbar, &Abar, &Bbar, modulus, n0prime);
-
-    // 5) 복귀
     mont_from(result, &Zbar, modulus, n0prime);
 }
 
@@ -875,8 +885,8 @@ void bignum_mod_exp(Bignum* result, const Bignum* base, const Bignum* exp, const
 
     // a = base mod N (mont_mul은 a,b < N 가정으로 사용하는 게 안전)
     Bignum a;
-    bignum_copy(&a, base);
-    bn_reduce_simple(&a, modulus);
+    bignum_init(&a);
+    bignum_mod(&a, &base, modulus);
 
     // a_bar = a * R mod N = MonPro(a, RR)
     Bignum a_bar;

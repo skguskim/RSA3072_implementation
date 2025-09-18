@@ -72,7 +72,7 @@ int test_bignum_modexp() {
     print_bignum("base", &a);
     print_bignum("exp", &b);
     print_bignum("mod", &modulus);
-    print_bignum("res", &result);
+    print_bignum("res(40)", &result);
     printf("\n");
 
     // Test case 2: Large number
@@ -86,7 +86,7 @@ int test_bignum_modexp() {
     print_bignum("base", &a);
     print_bignum("exp", &b);
     print_bignum("mod", &modulus);
-    print_bignum("res", &result);
+    print_bignum("res(f18ca)", &result);
     printf("\n");
 
     // Test case 3: exp by 1
@@ -100,7 +100,7 @@ int test_bignum_modexp() {
     print_bignum("base", &a);
     print_bignum("exp", &b);
     print_bignum("mod", &modulus);
-    print_bignum("res", &result);
+    print_bignum("res(28)", &result);
     printf("-------------------------\n");
 
     return 0;
