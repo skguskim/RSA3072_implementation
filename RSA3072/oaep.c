@@ -106,7 +106,7 @@ static void secure_zero(void *p, size_t n) {
  *  - 현재 구현은 L = "" 고정. lHash = H("").
  *  - 필요한 경우 (label, label_len) 인자를 추가해 Hash(L)로 변경하세요.
  */
-int rsa_oaep_encode(uint8_t *EM, const uint8_t *L, const Bignum *M, size_t k, const uint8_t *seed) {
+int rsa_oaep_encode(uint8_t *EM, const uint8_t *L, const Bignum *M, const size_t k, const uint8_t *seed) {
     if (!EM || !L || !M || !seed) return -1;
     if (k != RSA3072_K_BYTES) return -1; /* RSA-3072 전용 */
     if (M->size > OAEP_M_MAX) return -1;
@@ -169,122 +169,96 @@ int rsa_oaep_encode(uint8_t *EM, const uint8_t *L, const Bignum *M, size_t k, co
     return 0;
 }
 
-/*
- * rsa_oaep_decode - OAEP 디코딩 (RSA-3072, SHA-256, fixed buffers)
- *
- * 파라미터:
- *  - M_out : 복원된 메시지를 담을 Bignum (호출자는 M_out->limbs 버퍼가 OAEP_M_MAX 이상임을 보장)
- *  - L     : 레이블 (현재 구현은 L=""를 가정해 lHash = H("") 처리)
- *  - EM    : 인코딩된 메시지(길이 k 바이트, 보통 RSA 연산 후 얻은 바이트 스트림)
- *  - k     : EM 길이(바이트) — 이 구현은 RSA3072_K_BYTES(384)만 허용
- *
- * 반환:
- *   0  : 성공 (M_out->limbs에 복원된 메시지, M_out->size에 길이 저장)
- *  -1  : 실패 (포맷/검증 오류)
- */
-int rsa_oaep_decode(Bignum *M_out, const uint8_t *L, const uint8_t *EM, size_t k) {
-    if (!M_out || !L || !EM) return -1;
-    if (k != RSA3072_K_BYTES) return -1;
+// OAEP_DECODE
+int rsa_oaep_decode(uint8_t* M, size_t* mLen, const size_t mMax, const uint8_t* EM, const size_t k, const uint8_t* L, const size_t Llen) {
+    if (!M || !mLen || !EM) return -1;
+    const size_t db_len = k - OAEP_HLEN - 1;                   /* nLen − hLen − 8 (bits) ↔ k − hLen − 1 (bytes) */
 
-    /* EM 구조: 0x00 || maskedSeed(hLen) || maskedDB(db_len) */
-    if (EM[0] != 0x00) return -1;
+    /* [Y | maskedSeed | maskedDB] 파싱 */
+    uint8_t Y = EM[0];
+    const uint8_t* maskedSeed = EM + 1;
+    const uint8_t* maskedDB = EM + 1 + OAEP_HLEN;
 
-    size_t db_len = k - OAEP_HLEN - 1;
-    if (db_len > OAEP_DB_MAX) return -1;
-
-    /* 고정 내부 버퍼 */
-    uint8_t DB[OAEP_DB_MAX];
-    uint8_t dbMask[OAEP_DB_MAX];
-    uint8_t maskedDB[OAEP_DB_MAX];
-    uint8_t seedMask[OAEP_HLEN];
-    uint8_t maskedSeed[OAEP_HLEN];
+    /* --- 버퍼 준비 --- */
     uint8_t seed[OAEP_HLEN];
+    uint8_t seedMask[OAEP_HLEN];
+    uint8_t dbMask[OAEP_DB_MAX];        /* = db_len */
+    uint8_t DB[OAEP_DB_MAX];            /* 복원된 DB */
     uint8_t lHash[OAEP_HLEN];
+    int bad = 0;                         /* 형식 오류 플래그 */
 
-    /* 분리 */
-    memcpy(maskedSeed, EM + 1, OAEP_HLEN);
-    memcpy(maskedDB,   EM + 1 + OAEP_HLEN, db_len);
+    /* Y == 0x00 ? */
+    bad |= (Y != 0);
+
+    /* lHash = Hash(L) */
+    if (L && Llen > 0) dummy_sha256(L, Llen, lHash);
+    else               dummy_sha256((const uint8_t*)"", 0, lHash);
 
     /* seedMask = MGF(maskedDB, hLen) */
-    if (!rsa_mgf1_fixed(seedMask, OAEP_HLEN, maskedDB, db_len)) {
-        secure_zero(maskedDB, db_len);
-        secure_zero(maskedSeed, OAEP_HLEN);
-        secure_zero(seedMask, OAEP_HLEN);
-        return -1;
-    }
+    if (!rsa_mgf1_fixed(seedMask, OAEP_HLEN, maskedDB, db_len)) { bad = 1; goto finish; }
 
-    /* seed = maskedSeed ⊕ seedMask */
+    /* seed = maskedSeed XOR seedMask */
     for (size_t i = 0; i < OAEP_HLEN; ++i) seed[i] = maskedSeed[i] ^ seedMask[i];
 
     /* dbMask = MGF(seed, db_len) */
-    if (!rsa_mgf1_fixed(dbMask, db_len, seed, OAEP_HLEN)) {
-        secure_zero(DB, db_len);
-        secure_zero(dbMask, db_len);
-        secure_zero(maskedDB, db_len);
-        secure_zero(seedMask, OAEP_HLEN);
-        secure_zero(maskedSeed, OAEP_HLEN);
-        secure_zero(seed, OAEP_HLEN);
-        return -1;
-    }
+    if (!rsa_mgf1_fixed(dbMask, db_len, seed, OAEP_HLEN)) { bad = 1; goto finish; }
 
-    /* DB = maskedDB ⊕ dbMask */
+    /* DB = maskedDB XOR dbMask */
     for (size_t i = 0; i < db_len; ++i) DB[i] = maskedDB[i] ^ dbMask[i];
 
-    /* lHash = Hash(L) -- 현재 구현은 L=""를 가정(빈 레이블) */
-    dummy_sha256((const uint8_t *)"", 0, lHash);
+    /* DB = lHash || PS || 0x01 || M  */
 
-    /* lHash 비교 */
-    if (memcmp(DB, lHash, OAEP_HLEN) != 0) {
-        secure_zero(DB, db_len);
-        secure_zero(dbMask, db_len);
-        secure_zero(maskedDB, db_len);
-        secure_zero(seedMask, OAEP_HLEN);
-        secure_zero(maskedSeed, OAEP_HLEN);
-        secure_zero(seed, OAEP_HLEN);
-        secure_zero(lHash, OAEP_HLEN);
-        return -1;
+    /* 1) lHash 비교  */
+    {
+        uint8_t diff = 0;
+        for (size_t i = 0; i < OAEP_HLEN; ++i) diff |= (uint8_t)(DB[i] ^ lHash[i]);
+        bad |= (diff != 0);
     }
 
-    /* 0x01 구분자 찾기 (lHash 뒤의 PS(0x00...0x00) 다음에 0x01이 와야 함) */
-    size_t idx = OAEP_HLEN;
-    while (idx < db_len && DB[idx] == 0x00) idx++;
-    if (idx >= db_len || DB[idx] != 0x01) {
-        secure_zero(DB, db_len);
-        secure_zero(dbMask, db_len);
-        secure_zero(maskedDB, db_len);
-        secure_zero(seedMask, OAEP_HLEN);
-        secure_zero(maskedSeed, OAEP_HLEN);
-        secure_zero(seed, OAEP_HLEN);
-        secure_zero(lHash, OAEP_HLEN);
-        return -1;
+    // 2) PS는 전부 0x00 이어야 하고, 그 다음 바이트가 0x01 이어야 함.
+    size_t i = OAEP_HLEN;
+    int seen_one = 0;
+    size_t one_pos = 0;
+
+    while (i < db_len) {
+        uint8_t b = DB[i];
+        if (!seen_one) {
+            if (b == 0x00) {
+                /* PS 영역 계속 */
+            }
+            else if (b == 0x01) {
+                seen_one = 1;
+                one_pos = i;
+                break;          /* 0x01 발견 → 이후는 메시지 */
+            }
+            else {
+                /* PS 구간에 0x00/0x01 이외의 값 */
+                bad = 1;
+                break;
+            }
+        }
+        ++i;
     }
+    if (!seen_one) bad = 1;            /* 0x01 구분자를 못 찾음 */
 
-    /* 메시지 위치 및 길이 계산 */
-    size_t msg_offset = idx + 1;
-    size_t msg_len = db_len - msg_offset;
-    if (msg_len > OAEP_M_MAX) {
-        secure_zero(DB, db_len);
-        secure_zero(dbMask, db_len);
-        secure_zero(maskedDB, db_len);
-        secure_zero(seedMask, OAEP_HLEN);
-        secure_zero(maskedSeed, OAEP_HLEN);
-        secure_zero(seed, OAEP_HLEN);
-        secure_zero(lHash, OAEP_HLEN);
-        return -1;
-    }
+    /* 3) 메시지 추출 */
+    size_t m_off = seen_one ? (one_pos + 1) : db_len;
+    size_t m_len = (m_off <= db_len) ? (db_len - m_off) : 0;
 
-    /* 호출자 Bignum 버퍼로 복사 (호출자는 M_out->limbs의 용량을 보장해야 함) */
-    memcpy(M_out->limbs, DB + msg_offset, msg_len);
-    M_out->size = msg_len;
+    /* 출력 버퍼 체크 */
+    if (m_len > mMax) { bad = 1; goto finish; }
 
-    /* 민감값 소거 */
-    secure_zero(DB, db_len);
+    /* 메시지 복사 */
+    if (m_len && m_off < db_len) memcpy(M, DB + m_off, m_len);
+    *mLen = m_len;
+
+finish:
+    /* 민감 데이터 소거 */
+    secure_zero(seed, sizeof(seed));
+    secure_zero(seedMask, sizeof(seedMask));
     secure_zero(dbMask, db_len);
-    secure_zero(maskedDB, db_len);
-    secure_zero(seedMask, OAEP_HLEN);
-    secure_zero(maskedSeed, OAEP_HLEN);
-    secure_zero(seed, OAEP_HLEN);
-    secure_zero(lHash, OAEP_HLEN);
+    secure_zero(DB, db_len);
+    secure_zero(lHash, sizeof(lHash));
 
-    return 0;
+    return bad ? -1 : 0;
 }

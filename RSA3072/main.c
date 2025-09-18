@@ -26,7 +26,52 @@ static int hex_to_bytes(const char *hex, uint8_t *out, int max_len) {
 }
 
 
+<<<<<<< HEAD
+    char line[4096], key[64], value[4096];
+    Bignum n, e, m, c_expected, c_actual;
+    bignum_init(&n); bignum_init(&e); bignum_init(&m);
+    bignum_init(&c_expected); bignum_init(&c_actual);
+
+    int test_passed = 1, test_count = 0;
+
+    while (fgets(line, sizeof(line), fp)) {
+        if (sscanf(line, "%63[^=] = %4095s", key, value) == 2) {
+            if (strcmp(key, "n ") == 0) {
+                bignum_from_hex(&n, value);
+            } else if (strcmp(key, "e ") == 0) {
+                bignum_from_hex(&e, value);
+            } else if (strcmp(key, "M ") == 0) {
+                bignum_from_hex(&m, value);
+            } else if (strcmp(key, "C ") == 0) {
+                bignum_from_hex(&c_expected, value);
+
+                RSA_PublicKey pub = { n, e };
+                rsa_encrypt(&c_actual, &m, &pub);
+
+                test_count++;
+                if (bignum_compare(&c_actual, &c_expected) != 0) {
+                    printf("[-] ENT Test %d failed!\n", test_count);
+                    test_passed = 0;
+                    print_bignum("n", &n);
+                    print_bignum("e", &e);
+                    print_bignum("M", &m);
+                    print_bignum("c_ex", &c_expected);
+                    print_bignum("c_ac", &c_actual);
+                }
+            }
+        }
+    }
+    fclose(fp);
+
+    if (test_passed) printf("[+] All %d ENT tests passed!\n", test_count);
+    else printf("[-] Some ENT tests failed.\n");
+    return test_passed;
+}
+
+// ========== DET 벡터 테스트 ==========
+=======
 // ========== DET 벡터 테스트 (RSAES-OAEP with SHA-256, Deterministic Seed) ==========
+>>>>>>> e815dc3fc9f68d3747a3224fff4947363c3fbc14
 int test_det_vector(const char* filename) {
     FILE *fp = fopen(filename, "r");
     if (!fp) {
