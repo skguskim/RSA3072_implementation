@@ -511,7 +511,7 @@ void bignum_multiply(Bignum* result, const Bignum* a, const Bignum* b) {
     if (!rbuf) { bn_zero(result); return; }
 
     int n = (an > bn ? an : bn);
-    size_t ws_size = 4 * n + 8;
+    size_t ws_size = (size_t)(8 * n + 32);
     uint32_t* workspace = (uint32_t*)calloc(ws_size, sizeof(uint32_t));
     if (!workspace) { free(rbuf); bn_zero(result); return; }
     
@@ -814,12 +814,12 @@ static void mont_compute_RR(Bignum* RR, const Bignum* N) {
     }
 }
 
-// a <- a mod N (단순 반복 감산; a가 N보다 훨씬 크면 비효율적)
-static void bn_reduce_simple(Bignum* a, const Bignum* N) {
-    bn_normalize(a);
-    while (bn_ucmp(a, N) >= 0) {
-        bn_usub(a, a, N);
-    }
+static void bignum_mod(Bignum* result, const Bignum* x, const Bignum* N) {
+    if (!result || !x || !N || N->size == 0) { bignum_set_zero(result); return; }
+    if (bn_ucmp(x, N) < 0) { bignum_copy(result, x); return; }
+    Bignum q, rem;
+    bignum_divide(&q, &rem, x, N);
+    bignum_copy(result, &rem);
 }
 
 // ========= API 함수 =========
@@ -843,11 +843,10 @@ void bignum_mod_mul(Bignum* result, const Bignum* a, const Bignum* b, const Bign
 
     // 2) 입력을 N으로 감축
     Bignum A;
-    bignum_copy(&A, a);
-    bn_reduce_simple(&A, modulus);
+    bignum_mod(&A, a, modulus);
+
     Bignum B;
-    bignum_copy(&B, b);
-    bn_reduce_simple(&B, modulus);
+    bignum_mod(&B, b, modulus);
 
     // 3) 몽고메리 영역으로 진입
     Bignum Abar, Bbar, Zbar;
@@ -896,8 +895,7 @@ void bignum_mod_exp(Bignum* result, const Bignum* base, const Bignum* exp, const
 
     // a = base mod N (mont_mul은 a,b < N 가정으로 사용하는 게 안전)
     Bignum a;
-    bignum_copy(&a, base);
-    bn_reduce_simple(&a, modulus);
+    bignum_mod(&a, base, modulus);
 
     // a_bar = a * R mod N = MonPro(a, RR)
     Bignum a_bar;
