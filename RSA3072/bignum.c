@@ -604,7 +604,7 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
         if (q_hat > 0xFFFFFFFFull) q_hat = 0xFFFFFFFFull;
 
         // 과추정 보정
-        if (n > 1) {
+        if (n > 1) { 
             while (q_hat * v0 > ((r_hat << 32) | u0)) {
                 q_hat--;
                 r_hat += v1;
