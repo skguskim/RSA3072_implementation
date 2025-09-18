@@ -58,8 +58,9 @@ int generate_secure_random(Bignum* result, const size_t size) {
     return rc; //성공 시 0
 }
 
+//-------------------------------
 // 3072비트 소수 후보 난수를 생성
-// 생성된 후보는 반드시 3072비트 길이(MSB=1)이고 홀수(LSB=1)임이 보장됩니다.
+// 반드시 3072비트 길이(MSB=1)이고 홀수(LSB=1)
 // 성공 시 0, 실패 시 0이 아닌 값.
 int random_3072_candidate(Bignum* out) {
     const size_t BYTES = 384;
@@ -76,7 +77,7 @@ int random_3072_candidate(Bignum* out) {
     return 0;
 }
 
-// OAEP/PSS 패딩을 위한 32바이트(256비트) 무작위 시드를 생성합니다.
+// OAEP/PSS 패딩을 위한 32바이트(256비트) 무작위 시드를 생성
 // 성공 시 0, 실패 시 0이 아닌 값.
 int random_oaep_seed32(Bignum* out) {
     return generate_secure_random(out, 32);
