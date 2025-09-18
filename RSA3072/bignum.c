@@ -864,6 +864,7 @@ void bignum_mod_exp(Bignum* result, const Bignum* base, const Bignum* exp, const
     // 짝수 모듈러스는 몽고메리 불가 (RSA 모듈러스는 홀수이므로 OK)
     if ((modulus->limbs[0] & 1u) == 0u) {
         // 필요하면 여기서 다른(비몽고) 루틴으로 fallback 하세요.
+        printf("n이 짝수\n");
         bignum_set_zero(result);
         return;
     }

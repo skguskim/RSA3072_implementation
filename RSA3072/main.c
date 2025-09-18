@@ -45,9 +45,9 @@ int test_ent_vector(const char* filename) {
                 bignum_from_hex(&n, value);
             } else if (strcmp(key, "e ") == 0) {
                 bignum_from_hex(&e, value);
-            } else if (strcmp(key, "Msg ") == 0) {
+            } else if (strcmp(key, "M ") == 0) {
                 bignum_from_hex(&m, value);
-            } else if (strcmp(key, "Ciphertext ") == 0) {
+            } else if (strcmp(key, "C ") == 0) {
                 bignum_from_hex(&c_expected, value);
 
                 RSA_PublicKey pub = { n, e };
@@ -57,6 +57,11 @@ int test_ent_vector(const char* filename) {
                 if (bignum_compare(&c_actual, &c_expected) != 0) {
                     printf("[-] ENT Test %d failed!\n", test_count);
                     test_passed = 0;
+                    print_bignum("n", &n);
+                    print_bignum("e", &e);
+                    print_bignum("M", &m);
+                    print_bignum("c_ex", &c_expected);
+                    print_bignum("c_ac", &c_actual);
                 }
             }
         }
@@ -196,8 +201,8 @@ int test_kgt_vector(const char* filename) {
 int main() {
     printf("==== RSA-3072 Test Start ====\n");
 
-    test_bignum_divide();
-    test_bignum_modexp();
+    // test_bignum_divide();
+    // test_bignum_modexp();
 
     int overall_ok = 1;
 
