@@ -508,6 +508,7 @@ void bignum_multiply(Bignum* result, const Bignum* a, const Bignum* b) {
     free(workspace);
 }
 
+
 // =====================================================================
 //  큰 수 나눗셈
 // =====================================================================
@@ -575,11 +576,11 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
         return;
     }
 
-    // 2. 배열로 작업 (Up: 길이 n+m+1, Vp: 길이 n)
-    uint32_t U_prime[MAX_LIMBS + 1] = { 0 };
+    // 2. 배열로 작업 (U_prime: 길이 n+m+1, V_prime: 길이 n)
+    uint32_t U_prime[MAX_LIMBS + 1] = { 0 }; 
     uint32_t V_prime[MAX_LIMBS] = { 0 };
 
-    // U, V 값을 Up, Vp 배열에 복사
+    // U, V 값을 U_prime, V_prime 배열에 복사
     for (int i = 0; i < U.size && i < MAX_LIMBS + 1; ++i) U_prime[i] = U.limbs[i];
     for (int i = 0; i < n && i < MAX_LIMBS; ++i)          V_prime[i] = V.limbs[i];
 
@@ -634,7 +635,7 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
                 U_prime[j + i] = (uint32_t)s_sum;
                 carry2 = s_sum >> 32;
             }
-            U_prime[j + n] += (uint32_t)carry2; 
+            U_prime[j + n] += (uint32_t)carry2;
             q_hat--;
         }
 
