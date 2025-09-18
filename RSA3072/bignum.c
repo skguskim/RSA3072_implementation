@@ -598,9 +598,9 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
         uint64_t v1 = V_prime[n - 1];
         uint64_t v0 = (n >= 2) ? V_prime[n - 2] : 0;
 
-        uint64_t uhat = (u2 << 32) | u1;
-        uint64_t q_hat = uhat / v1;
-        uint64_t r_hat = uhat % v1;
+        uint64_t u_hat = (u2 << 32) | u1;
+        uint64_t q_hat = u_hat / v1;
+        uint64_t r_hat = u_hat % v1;
         if (q_hat > 0xFFFFFFFFull) q_hat = 0xFFFFFFFFull;
 
         // 과추정 보정
