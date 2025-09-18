@@ -577,7 +577,7 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
     }
 
     // 2. 배열로 작업 (U_prime: 길이 n+m+1, V_prime: 길이 n)
-    uint32_t U_prime[MAX_LIMBS + 1] = { 0 };
+    uint32_t U_prime[MAX_LIMBS + 1] = { 0 }; 
     uint32_t V_prime[MAX_LIMBS] = { 0 };
 
     // U, V 값을 U_prime, V_prime 배열에 복사
