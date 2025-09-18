@@ -508,7 +508,6 @@ void bignum_multiply(Bignum* result, const Bignum* a, const Bignum* b) {
     free(workspace);
 }
 
-
 // =====================================================================
 //  큰 수 나눗셈
 // =====================================================================
@@ -576,11 +575,11 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
         return;
     }
 
-    // 2. 배열로 작업 (U_prime: 길이 n+m+1, V_prime: 길이 n)
-    uint32_t U_prime[MAX_LIMBS + 1] = { 0 }; 
+    // 2. 배열로 작업 (Up: 길이 n+m+1, Vp: 길이 n)
+    uint32_t U_prime[MAX_LIMBS + 1] = { 0 };
     uint32_t V_prime[MAX_LIMBS] = { 0 };
 
-    // U, V 값을 U_prime, V_prime 배열에 복사
+    // U, V 값을 Up, Vp 배열에 복사
     for (int i = 0; i < U.size && i < MAX_LIMBS + 1; ++i) U_prime[i] = U.limbs[i];
     for (int i = 0; i < n && i < MAX_LIMBS; ++i)          V_prime[i] = V.limbs[i];
 
@@ -635,7 +634,7 @@ void bignum_divide(Bignum* quotient, Bignum* remainder,
                 U_prime[j + i] = (uint32_t)s_sum;
                 carry2 = s_sum >> 32;
             }
-            U_prime[j + n] += (uint32_t)carry2;
+            U_prime[j + n] += (uint32_t)carry2; 
             q_hat--;
         }
 
@@ -747,7 +746,7 @@ static void mont_mul(Bignum* r, const Bignum* a, const Bignum* b, const Bignum* 
 
         // t = t / b (워드 1칸 오른쪽 시프트) : 고정 길이
         for (int k = 0; k < n; ++k) t[k] = t[k + 1];
-        t[n] = 0;
+        t[n + 1] = 0;
     }
 
     // 최종 보정
@@ -769,12 +768,10 @@ static void mont_mul(Bignum* r, const Bignum* a, const Bignum* b, const Bignum* 
 }
 
 // 몽고메리 변환 헬퍼
-static void mont_to(Bignum* r, const Bignum* x,
-    const Bignum* N, uint32_t n0prime, const Bignum* RR) {
+static void mont_to(Bignum* r, const Bignum* x, const Bignum* N, uint32_t n0prime, const Bignum* RR) {
     mont_mul(r, x, RR, N, n0prime);               // r = x * R  (mod N)
 }
-static void mont_from(Bignum* r, const Bignum* x_bar,
-    const Bignum* N, uint32_t n0prime) {
+static void mont_from(Bignum* r, const Bignum* x_bar, const Bignum* N, uint32_t n0prime) {
     Bignum one; bn_zero(&one); one.limbs[0] = 1u; one.size = 1;
     mont_mul(r, x_bar, &one, N, n0prime);         // r = x_bar * R^{-1} (mod N)
 }

@@ -66,15 +66,7 @@ int test_ent_vector(const char* filename) {
             } else if (strcmp(key, "e ") == 0) {
                 bignum_from_hex(&e, value);
             } else if (strcmp(key, "M ") == 0) {
-                msg_len = hex_to_bytes(value, msg_bytes, sizeof(msg_bytes));
-                if (msg_len < 0) {
-                    printf("[-] Failed to parse M hex\n");
-                    fclose(fp);
-                    return 0;
-                }
-                bignum_init(&M);
-                memcpy(M.limbs, msg_bytes, msg_len);
-                M.size = msg_len;
+                bignum_from_hex(&M, value);
             } else if (strcmp(key, "C ") == 0) {
                 bignum_init(&C_expected);
                 bignum_from_hex(&C_expected, value);
@@ -142,7 +134,7 @@ int main() {
     printf("==== RSA-3072 Test Start ====\n");
 
     // test_bignum_divide();
-    // test_bignum_modexp();
+    test_bignum_modexp();
 
     int overall_ok = 1;
 
