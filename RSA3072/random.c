@@ -58,7 +58,7 @@ int generate_secure_random(Bignum* result, const size_t size) {
     return rc; //성공 시 0
 }
 
-// 3072비트 소수 후보 난수를 생성합니다.
+// 3072비트 소수 후보 난수를 생성
 // 생성된 후보는 반드시 3072비트 길이(MSB=1)이고 홀수(LSB=1)임이 보장됩니다.
 // 성공 시 0, 실패 시 0이 아닌 값.
 int random_3072_candidate(Bignum* out) {
