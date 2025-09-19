@@ -9,7 +9,7 @@
 
 typedef struct {
     uint32_t limbs[BIGNUM_ARRAY_SIZE];
-    int size;
+    size_t size;
 } Bignum; // Å« ¼ö
 
 // =============================================================================
