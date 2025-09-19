@@ -63,8 +63,11 @@ int test_ent_vector(const char* filename) {
         if (sscanf(line, "%63[^=] = %4095s", key, value) == 2) {
             if (strcmp(key, "n ") == 0) {
                 bignum_from_hex(&n, value);
+                print_bignum("n", &n);
+                printf("\n");
             } else if (strcmp(key, "e ") == 0) {
                 bignum_from_hex(&e, value);
+                print_bignum("e", &e);
             } else if (strcmp(key, "M ") == 0) {
                 bignum_from_hex(&M, value);
             } else if (strcmp(key, "C ") == 0) {
@@ -104,11 +107,10 @@ int test_ent_vector(const char* filename) {
             if (bignum_compare(&C_actual, &C_expected) != 0) {
                 printf("[-] DET Test %d failed!\n", test_count);
                 test_passed = 0;
-                print_bignum("n", &n);
-                print_bignum("e", &e);
                 print_bignum("M", &M);
                 print_bignum("c_ex", &C_expected);
                 print_bignum("c_ac", &C_actual);
+                printf("\n");
             } else {
                 printf("[+] DET Test %d passed.\n", test_count);
             }

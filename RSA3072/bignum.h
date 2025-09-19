@@ -5,7 +5,7 @@
 #include <stdint.h> // uint32_t와 같은 고정 너비 정수를 사용하기 위함
 
 // 큰 수 저장을 위한 배열 크기 (32비트 정수 기준)
-#define BIGNUM_ARRAY_SIZE ((3072 / 32) + 1)
+#define BIGNUM_ARRAY_SIZE ((5000 / 32) + 1)
 
 typedef struct {
     uint32_t limbs[BIGNUM_ARRAY_SIZE];

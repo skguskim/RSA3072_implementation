@@ -260,6 +260,7 @@ int bignum_from_hex(Bignum* bn, const char* hex_str) {
         else if (*p >= 'a' && *p <= 'f') v = 10 + (*p - 'a');
         else if (*p >= 'A' && *p <= 'F') v = 10 + (*p - 'A');
         else return -1; // invalid
+
         // bn = bn*16 + v
         bn_mul_small(bn, 16u);
         bn_add_small(bn, (uint32_t)v);
