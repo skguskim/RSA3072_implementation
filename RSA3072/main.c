@@ -101,6 +101,7 @@ int test_ent_vector(const char* filename) {
             while (em_bn.size > 0 && em_bn.limbs[em_bn.size - 1] == 0) em_bn.size--;
 
             RSA_PublicKey pub_key = { n, e };
+            print_bignum("padded message", &em_bn);
             rsa_encrypt(&C_actual, &em_bn, &pub_key);
 
             // 비교
