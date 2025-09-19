@@ -6,12 +6,9 @@
 #define RSA_ERROR_MESSAGE_TOO_LARGE -2
 
 // RSA Ecryption
-int rsa_encrypt(uint8_t* ciphertext, const Bignum* message, const RSA_PublicKey* pub_key) {
-	Bignum* C = malloc(sizeof(Bignum));
-	bignum_init(C);
-	bignum_copy(C, ciphertext);
+int rsa_encrypt(Bignum* ciphertext, const Bignum* message, const RSA_PublicKey* pub_key) {
 	// input validation
-    if (C == NULL || message == NULL || pub_key == NULL) {
+    if (ciphertext == NULL || message == NULL || pub_key == NULL) {
         return RSA_ERROR_NULL_ARGUMENT;
     }
 	
@@ -20,8 +17,7 @@ int rsa_encrypt(uint8_t* ciphertext, const Bignum* message, const RSA_PublicKey*
         return RSA_ERROR_MESSAGE_TOO_LARGE;
     }
 
-	Bignum m_reduced;
-	bignum_mod_exp(C, &m_reduced, &pub_key->e, &pub_key->n);
+	bignum_mod_exp(ciphertext, message, &pub_key->e, &pub_key->n);
 	return RSA_SUCCESS;
 }
 
