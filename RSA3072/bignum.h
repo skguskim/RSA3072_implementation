@@ -20,10 +20,12 @@ typedef struct {
 void bignum_init(Bignum* bn);
 void bignum_set_zero(Bignum* bn);
 void bignum_copy(Bignum* dest, const Bignum* src);
+void bn_set_bit_local(Bignum* bn, int bit_index);
 
-// 문자열과 Bignum 간 변환 함수 (16진수 권장)
+// Bignum 변환 함수 (16진수 권장)
 int bignum_from_hex(Bignum* bn, const char* hex_str);
 char* bignum_to_hex(const Bignum* bn);
+int bignum_from_binary(Bignum* bn, const unsigned char* buf, size_t buf_len);
 
 // Bignum 출력 함수
 // name: 같이 출력할 설명

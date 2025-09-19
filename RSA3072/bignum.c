@@ -18,49 +18,6 @@ static inline int  limbs_trim(const uint32_t* x, int n){
     return n; 
 }
 
-int bignum_from_binary(Bignum* bn, const unsigned char* buf, size_t buf_len) {
-    bignum_init(bn);
-    if (!buf || buf_len == 0) {
-        return 0; // 성공 (0으로 초기화)
-    }
-
-    size_t limbs_needed = (buf_len + sizeof(uint32_t) - 1) / sizeof(uint32_t);
-    if (limbs_needed > BIGNUM_ARRAY_SIZE) {
-        return -1; // 버퍼 오버플로우
-    }
-
-    memcpy(bn->limbs, buf, buf_len);
-    bn->size = (int)limbs_needed;
-
-    // bignum.c에 정의된 정규화 함수 호출
-    while (bn->size > 0 && bn->limbs[bn->size - 1] == 0) {
-        bn->size--;
-    }
-
-    return 0;
-}
-
-// Bignum의 특정 비트를 1로 설정합니다.
-void bn_set_bit_local(Bignum* bn, int bit_index) {
-    if (bit_index < 0) return;
-
-    int limb_idx = bit_index / 32;
-    int bit_offset = bit_index % 32;
-
-    if (limb_idx >= BIGNUM_ARRAY_SIZE) return; // 범위 초과
-
-    // 필요하다면 Bignum의 size 확장
-    if (limb_idx >= bn->size) {
-        // 기존 size와 새 limb_idx 사이를 0으로 채움
-        for (int i = bn->size; i <= limb_idx; ++i) {
-            bn->limbs[i] = 0;
-        }
-        bn->size = limb_idx + 1;
-    }
-
-    bn->limbs[limb_idx] |= (1u << bit_offset);
-}
-
 // 비트 길이 확인
 // a: 비트 길이를 확인할 큰 수 포인터
 // 반환값: 비트 길이
@@ -242,6 +199,27 @@ void bignum_copy(Bignum* dest, const Bignum* src) {
     dest->size = src->size;
 }
 
+// Bignum의 특정 비트를 1로 설정합니다.
+void bn_set_bit_local(Bignum* bn, int bit_index) {
+    if (bit_index < 0) return;
+
+    int limb_idx = bit_index / 32;
+    int bit_offset = bit_index % 32;
+
+    if (limb_idx >= BIGNUM_ARRAY_SIZE) return; // 범위 초과
+
+    // 필요하다면 Bignum의 size 확장
+    if (limb_idx >= bn->size) {
+        // 기존 size와 새 limb_idx 사이를 0으로 채움
+        for (int i = bn->size; i <= limb_idx; ++i) {
+            bn->limbs[i] = 0;
+        }
+        bn->size = limb_idx + 1;
+    }
+
+    bn->limbs[limb_idx] |= (1u << bit_offset);
+}
+
 // hex → bignum (대소문자/0x 허용). 성공 0, 실패 -1
 int bignum_from_hex(Bignum* bn, const char* hex_str) {
     bn_zero(bn);
@@ -290,6 +268,28 @@ char* bignum_to_hex(const Bignum* bn) {
         n += snprintf(buf + n, maxlen - n, "%08x", bn->limbs[i]);
     }
     return buf;
+}
+
+int bignum_from_binary(Bignum* bn, const unsigned char* buf, size_t buf_len) {
+    bignum_init(bn);
+    if (!buf || buf_len == 0) {
+        return 0; // 성공 (0으로 초기화)
+    }
+
+    size_t limbs_needed = (buf_len + sizeof(uint32_t) - 1) / sizeof(uint32_t);
+    if (limbs_needed > BIGNUM_ARRAY_SIZE) {
+        return -1; // 버퍼 오버플로우
+    }
+
+    memcpy(bn->limbs, buf, buf_len);
+    bn->size = (int)limbs_needed;
+
+    // bignum.c에 정의된 정규화 함수 호출
+    while (bn->size > 0 && bn->limbs[bn->size - 1] == 0) {
+        bn->size--;
+    }
+
+    return 0;
 }
 
 void print_bignum(const char* name, const Bignum* bn) {
@@ -894,22 +894,19 @@ void bignum_mod_exp(Bignum* result, const Bignum* base, const Bignum* exp, const
     Bignum RR;
     mont_compute_RR(&RR, modulus);  // RR = R^2 mod N
 
-    // a = base mod N (mont_mul은 a,b < N 가정으로 사용하는 게 안전)
-    Bignum a;
-    bignum_mod(&a, base, modulus);
-
-    // a_bar = a * R mod N = MonPro(a, RR)
-    Bignum a_bar;
+    Bignum a, a_bar;
     bignum_init(&a_bar);
-    mont_mul(&a_bar, &a, &RR, modulus, n0prime);
+
+    bignum_mod(&a, base, modulus);                  // a = base mod N (mont_mul은 a,b < N 가정으로 사용하는 게 안전)
+    mont_mul(&a_bar, &a, &RR, modulus, n0prime);    // a_bar = a * R mod N = MonPro(a, RR)
 
     // res_bar = 1 * R mod N  (몽고메리의 '1')
-    Bignum one;
+    Bignum one, res_bar;
     bignum_init(&one);
+    bignum_init(&res_bar);
     one.limbs[0] = 1u;
     one.size = 1;
-    Bignum res_bar;
-    bignum_init(&res_bar);
+
     mont_mul(&res_bar, &one, &RR, modulus, n0prime);
 
     // --- 지수승 루프 (LSB-first) ---
